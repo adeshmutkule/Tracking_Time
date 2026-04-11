@@ -3,8 +3,40 @@ body {
   min-height: 100vh;
 }
 
+.container {
+  max-width: 1280px;
+}
+
 h1 {
   font-weight: 700;
+}
+
+.hero-card {
+  background: linear-gradient(135deg, rgba(13, 110, 253, 0.12), rgba(25, 135, 84, 0.08));
+  border: 1px solid rgba(13, 110, 253, 0.08);
+}
+
+.eyebrow {
+  display: inline-block;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(13, 110, 253, 0.12);
+  color: #0d6efd;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  max-width: 100%;
 }
 
 .card {
@@ -12,8 +44,37 @@ h1 {
   border-radius: 14px;
 }
 
+.task-card .card-body {
+  padding: 1.25rem;
+}
+
+.task-form .form-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.btn-add-task {
+  min-height: 42px;
+}
+
+.task-table {
+  min-width: 980px;
+}
+
 .action-buttons .btn {
   margin: 2px;
+}
+
+.task-action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.task-action-grid .btn {
+  min-width: 78px;
 }
 
 .status-badge {
@@ -52,7 +113,28 @@ h1 {
 }
 
 @media (max-width: 575.98px) {
+  .header-actions,
+  .task-action-grid {
+    width: 100%;
+  }
+
+  .header-actions .btn,
+  .header-actions .user-chip,
+  .task-action-grid .btn {
+    width: 100%;
+  }
+
+  .task-card .card-body {
+    padding: 1rem;
+  }
+
   .report-actions .btn {
     width: 100%;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .task-table {
+    min-width: 860px;
   }
 }
