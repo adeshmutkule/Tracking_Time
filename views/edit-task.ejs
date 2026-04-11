@@ -12,12 +12,20 @@
   </head>
   <body>
     <div class="container py-4">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="mb-0">Edit Task</h1>
-        <div class="d-flex gap-2 align-items-center">
-          <span class="small text-muted">User: <strong><%= currentUser.full_name %></strong></span>
-          <a href="/" class="btn btn-outline-secondary">Back</a>
-          <a href="/logout" class="btn btn-outline-danger">Logout</a>
+      <div class="card hero-card shadow-sm mb-4">
+        <div class="card-body">
+          <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-start align-items-lg-center">
+            <div>
+              <p class="eyebrow mb-2">Task Editor</p>
+              <h1 class="mb-1">Edit Task</h1>
+              <p class="text-muted mb-0">Update task details and timing.</p>
+            </div>
+            <div class="header-actions d-flex flex-column flex-sm-row gap-2 w-100 w-lg-auto align-items-stretch align-items-sm-center">
+              <span class="user-chip text-truncate">User: <strong><%= currentUser.full_name %></strong></span>
+              <a href="/" class="btn btn-outline-secondary">Back</a>
+              <a href="/logout" class="btn btn-outline-danger">Logout</a>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -25,9 +33,9 @@
       <div class="alert alert-danger"><%= error %></div>
       <% } %>
 
-      <div class="card shadow-sm">
+      <div class="card shadow-sm task-card">
         <div class="card-body">
-          <form action="/task/<%= task.id %>/edit" method="POST" class="row g-3">
+          <form action="/task/<%= task.id %>/edit" method="POST" class="row g-3 task-form">
             <div class="col-12">
               <label class="form-label">Task Name</label>
               <input
@@ -38,7 +46,7 @@
                 required
               />
             </div>
-            <div class="col-md-6">
+            <div class="col-12 col-md-6">
               <label class="form-label">Task Date</label>
               <input
                 type="date"
@@ -48,7 +56,7 @@
                 required
               />
             </div>
-            <div class="col-md-6">
+            <div class="col-12 col-md-6">
               <label class="form-label">Start Time</label>
               <input
                 type="time"
@@ -58,7 +66,7 @@
                 required
               />
             </div>
-            <div class="col-md-6">
+            <div class="col-12 col-md-6">
               <label class="form-label">End Time (Optional)</label>
               <input
                 type="time"
@@ -67,8 +75,8 @@
                 value="<%= endTimeValue %>"
               />
             </div>
-            <div class="col-12 d-flex gap-2">
-              <button type="submit" class="btn btn-primary">Save Changes</button>
+            <div class="col-12 d-flex flex-column flex-sm-row gap-2">
+              <button type="submit" class="btn btn-primary btn-add-task">Save Changes</button>
               <a href="/" class="btn btn-outline-secondary">Cancel</a>
             </div>
           </form>

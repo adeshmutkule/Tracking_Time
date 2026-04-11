@@ -69,7 +69,55 @@
       <div class="card shadow-sm task-card">
         <div class="card-body">
           <h5 class="card-title">Tasks</h5>
-          <div class="table-responsive">
+          <div class="task-mobile-list d-md-none">
+            <% if (tasks.length === 0) { %>
+            <div class="task-mobile-empty text-center text-muted py-4">No tasks available.</div>
+            <% } %>
+
+            <% tasks.forEach((task) => { %>
+            <div class="task-mobile-item">
+              <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                <div>
+                  <div class="task-mobile-label">Task Name</div>
+                  <div class="task-mobile-title"><%= task.task_name %></div>
+                </div>
+                <span class="badge status-badge status-<%= task.status %>"><%= task.status %></span>
+              </div>
+
+              <div class="task-mobile-meta">
+                <div>
+                  <span class="task-mobile-label">ID</span>
+                  <span><%= task.id %></span>
+                </div>
+                <div>
+                  <span class="task-mobile-label">Task Date</span>
+                  <span><%= task.task_date ? new Date(task.task_date).toLocaleDateString() : '-' %></span>
+                </div>
+                <div>
+                  <span class="task-mobile-label">Total Time</span>
+                  <span><strong><%= formatSeconds(task.total_time || 0) %></strong></span>
+                </div>
+              </div>
+
+              <div class="task-mobile-actions">
+                <a href="/task/<%= task.id %>/edit" class="btn btn-sm btn-primary">Edit</a>
+                <a href="/start/<%= task.id %>" class="btn btn-sm btn-success">Start</a>
+                <a href="/pause/<%= task.id %>" class="btn btn-sm btn-warning">Pause</a>
+                <a href="/resume/<%= task.id %>" class="btn btn-sm btn-info text-white">Resume</a>
+                <a href="/end/<%= task.id %>" class="btn btn-sm btn-dark">End</a>
+                <a
+                  href="/delete/<%= task.id %>"
+                  class="btn btn-sm btn-danger"
+                  onclick="return confirm('Delete this task and all logs?')"
+                >
+                  Delete
+                </a>
+              </div>
+            </div>
+            <% }) %>
+          </div>
+
+          <div class="table-responsive d-none d-md-block">
             <table class="table table-striped align-middle mb-0 task-table">
               <thead>
                 <tr>

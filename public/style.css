@@ -7,6 +7,23 @@ body {
   max-width: 1280px;
 }
 
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+}
+
+.auth-card {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+.auth-form .form-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #495057;
+}
+
 h1 {
   font-weight: 700;
 }
@@ -62,6 +79,65 @@ h1 {
   min-width: 980px;
 }
 
+.task-mobile-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.task-mobile-item {
+  background: rgba(248, 251, 255, 0.95);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  padding: 0.95rem;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.task-mobile-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 0.2rem;
+}
+
+.task-mobile-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.task-mobile-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.task-mobile-meta > div {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  padding: 0.65rem 0.7rem;
+  min-width: 0;
+}
+
+.task-mobile-meta span:last-child {
+  display: block;
+  color: #111827;
+  word-break: break-word;
+}
+
+.task-mobile-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.task-mobile-actions .btn {
+  width: 100%;
+}
+
 .action-buttons .btn {
   margin: 2px;
 }
@@ -103,6 +179,12 @@ h1 {
   background: linear-gradient(135deg, rgba(13, 110, 253, 0.1), rgba(25, 135, 84, 0.08));
 }
 
+.report-toolbar .form-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #495057;
+}
+
 .report-summary .badge {
   font-size: 0.9rem;
   padding: 0.55rem 0.8rem;
@@ -113,6 +195,15 @@ h1 {
 }
 
 @media (max-width: 575.98px) {
+  .auth-shell {
+    align-items: flex-start;
+    padding-top: 1.25rem;
+  }
+
+  .auth-card .card-body {
+    padding: 1rem;
+  }
+
   .header-actions,
   .task-action-grid {
     width: 100%;
@@ -126,6 +217,34 @@ h1 {
 
   .task-card .card-body {
     padding: 1rem;
+  }
+
+  .task-mobile-item {
+    padding: 0.85rem;
+    border-radius: 14px;
+  }
+
+  .task-mobile-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .task-mobile-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .user-chip {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .hero-card .card-body {
+    padding: 1rem;
+  }
+
+  .report-summary .badge {
+    width: 100%;
+    justify-content: center;
   }
 
   .report-actions .btn {
