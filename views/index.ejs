@@ -14,7 +14,11 @@
     <div class="container py-4">
       <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0">Smart Work Time Tracker</h1>
-        <a href="/report" class="btn btn-outline-primary">Daily Report</a>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="small text-muted">User: <strong><%= currentUser.full_name %></strong></span>
+          <a href="/report" class="btn btn-outline-primary">Daily Report</a>
+          <a href="/logout" class="btn btn-outline-danger">Logout</a>
+        </div>
       </div>
 
       <% if (error) { %>
