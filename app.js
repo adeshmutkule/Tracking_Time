@@ -1,8 +1,10 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
+const session = require('express-session');
 
 const { ensureSchema } = require('./config/db');
+const authRoutes = require('./routes/auth');
 const taskRoutes = require('./routes/tasks');
 const reportRoutes = require('./routes/report');
 
@@ -14,7 +16,20 @@ app.set('views', path.join(__dirname, 'views'));
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'simple-session-secret',
+    resave: false,
+    saveUninitialized: false
+  })
+);
 
+app.use((req, res, next) => {
+  res.locals.currentUser = req.session.user || null;
+  next();
+});
+
+app.use('/', authRoutes);
 app.use('/', taskRoutes);
 app.use('/', reportRoutes);
 

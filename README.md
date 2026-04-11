@@ -2,6 +2,8 @@
 
 A server-rendered Node.js time-tracking app using Express, EJS, body-parser, and MySQL.
 
+Now supports multi-user login/signup. Each user's tasks and reports are stored and shown separately.
+
 ## Tech Stack
 
 - Node.js
@@ -19,13 +21,23 @@ Run this SQL in MySQL:
 CREATE DATABASE IF NOT EXISTS work_tracker;
 USE work_tracker;
 
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  full_name VARCHAR(120) NOT NULL,
+  email VARCHAR(190) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
   task_name VARCHAR(255) NOT NULL,
   task_date DATE NOT NULL,
   status ENUM('idle', 'running', 'paused', 'completed') NOT NULL DEFAULT 'idle',
   total_time INT NOT NULL DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS task_logs (
@@ -53,6 +65,7 @@ The app reads these environment variables (defaults shown):
 - `DB_PASSWORD=`
 - `DB_NAME=work_tracker`
 - `PORT=3000`
+- `SESSION_SECRET=simple-session-secret`
 
 Example (PowerShell):
 
@@ -86,6 +99,11 @@ The report page also supports:
 ## Routes
 
 - `GET /`
+- `GET /signup`
+- `POST /signup`
+- `GET /login`
+- `POST /login`
+- `GET /logout`
 - `POST /add-task`
 - `GET /delete/:id`
 - `GET /start/:id`

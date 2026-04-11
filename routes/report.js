@@ -12,15 +12,18 @@ const {
   requireReportDate,
   buildReportFilename
 } = require('../utils/formatters');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
-async function fetchReportLogs(reportDate = '') {
-  const params = [];
-  let dateFilter = '';
+router.use(requireAuth);
+
+async function fetchReportLogs(userId, reportDate = '') {
+  const params = [userId];
+  let dateFilter = 'WHERE t.user_id = ?';
 
   if (reportDate) {
-    dateFilter = 'WHERE DATE(t.task_date) = ?';
+    dateFilter += ' AND DATE(t.task_date) = ?';
     params.push(reportDate);
   }
 
@@ -47,8 +50,8 @@ async function fetchReportLogs(reportDate = '') {
   return logs;
 }
 
-async function getReportSummary(reportDate = '') {
-  const logs = await fetchReportLogs(reportDate);
+async function getReportSummary(userId, reportDate = '') {
+  const logs = await fetchReportLogs(userId, reportDate);
   const totalDuration = logs.reduce((sum, log) => sum + Number(log.duration || 0), 0);
 
   return { logs, totalDuration };
@@ -283,9 +286,11 @@ function createExcelReportSheet(workbook, logs, totalDuration) {
 }
 
 router.get('/report', async (req, res) => {
+  const userId = Number(req.session.user?.id || 0);
+
   try {
     const reportDate = normalizeReportDate(req.query.date);
-    const { logs, totalDuration } = await getReportSummary(reportDate);
+    const { logs, totalDuration } = await getReportSummary(userId, reportDate);
 
     res.render('report', {
       logs,
@@ -302,6 +307,8 @@ router.get('/report', async (req, res) => {
 });
 
 router.get('/report/export/excel', async (req, res) => {
+  const userId = Number(req.session.user?.id || 0);
+
   try {
     const reportDate = normalizeReportDate(req.query.date);
 
@@ -309,7 +316,7 @@ router.get('/report/export/excel', async (req, res) => {
       return;
     }
 
-    const { logs, totalDuration } = await getReportSummary(reportDate);
+    const { logs, totalDuration } = await getReportSummary(userId, reportDate);
     const workbook = new ExcelJS.Workbook();
     createExcelReportSheet(workbook, logs, totalDuration);
 
@@ -324,6 +331,8 @@ router.get('/report/export/excel', async (req, res) => {
 });
 
 router.get('/report/export/pdf', async (req, res) => {
+  const userId = Number(req.session.user?.id || 0);
+
   try {
     const reportDate = normalizeReportDate(req.query.date);
 
@@ -331,7 +340,7 @@ router.get('/report/export/pdf', async (req, res) => {
       return;
     }
 
-    const { logs, totalDuration } = await getReportSummary(reportDate);
+    const { logs, totalDuration } = await getReportSummary(userId, reportDate);
     const doc = new PDFDocument({ margin: 36, size: 'A4', layout: 'landscape' });
 
     res.setHeader('Content-Type', 'application/pdf');

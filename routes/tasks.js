@@ -6,8 +6,15 @@ const {
   buildRedirectMessage,
   normalizeReportDate
 } = require('../utils/formatters');
+const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
+
+router.use(requireAuth);
+
+function getCurrentUserId(req) {
+  return Number(req.session.user?.id || 0);
+}
 
 function normalizeTimeValue(timeValue) {
   const value = String(timeValue || '').trim();
@@ -85,8 +92,13 @@ async function refreshTaskTotalTime(taskId) {
 }
 
 router.get('/', async (req, res) => {
+  const userId = getCurrentUserId(req);
+
   try {
-    const [tasks] = await pool.query('SELECT * FROM tasks ORDER BY created_at DESC, id DESC');
+    const [tasks] = await pool.query(
+      'SELECT * FROM tasks WHERE user_id = ? ORDER BY created_at DESC, id DESC',
+      [userId]
+    );
 
     res.render('index', {
       tasks,
@@ -100,6 +112,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/add-task', async (req, res) => {
+  const userId = getCurrentUserId(req);
   const taskName = (req.body.task_name || '').trim();
   const taskDate = normalizeReportDate(req.body.task_date);
   const startTime = normalizeTimeValue(req.body.start_time);
@@ -124,8 +137,8 @@ router.post('/add-task', async (req, res) => {
       await connection.beginTransaction();
 
       const [taskResult] = await connection.query(
-        'INSERT INTO tasks (task_name, task_date, status, total_time) VALUES (?, ?, ?, ?)',
-        [taskName, taskDate, 'running', 0]
+        'INSERT INTO tasks (user_id, task_name, task_date, status, total_time) VALUES (?, ?, ?, ?, ?)',
+        [userId, taskName, taskDate, 'running', 0]
       );
 
       await connection.query('INSERT INTO task_logs (task_id, start_time) VALUES (?, ?)', [taskResult.insertId, startDateTime]);
@@ -144,6 +157,7 @@ router.post('/add-task', async (req, res) => {
 });
 
 router.get('/task/:id/edit', async (req, res) => {
+  const userId = getCurrentUserId(req);
   const taskId = Number(req.params.id);
 
   if (!taskId) {
@@ -151,7 +165,7 @@ router.get('/task/:id/edit', async (req, res) => {
   }
 
   try {
-    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ?', [taskId]);
+    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
     const task = taskRows[0];
 
     if (!task) {
@@ -177,6 +191,7 @@ router.get('/task/:id/edit', async (req, res) => {
 });
 
 router.post('/task/:id/edit', async (req, res) => {
+  const userId = getCurrentUserId(req);
   const taskId = Number(req.params.id);
   const taskName = (req.body.task_name || '').trim();
   const taskDate = normalizeReportDate(req.body.task_date);
@@ -216,7 +231,10 @@ router.post('/task/:id/edit', async (req, res) => {
     try {
       await connection.beginTransaction();
 
-      const [taskRows] = await connection.query('SELECT id FROM tasks WHERE id = ? FOR UPDATE', [taskId]);
+      const [taskRows] = await connection.query(
+        'SELECT id FROM tasks WHERE id = ? AND user_id = ? FOR UPDATE',
+        [taskId, userId]
+      );
 
       if (!taskRows[0]) {
         await connection.rollback();
@@ -268,6 +286,7 @@ router.post('/task/:id/edit', async (req, res) => {
 });
 
 router.get('/delete/:id', async (req, res) => {
+  const userId = getCurrentUserId(req);
   const taskId = Number(req.params.id);
 
   if (!taskId) {
@@ -275,8 +294,14 @@ router.get('/delete/:id', async (req, res) => {
   }
 
   try {
+    const [taskRows] = await pool.query('SELECT id FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
+
+    if (!taskRows[0]) {
+      return res.redirect(buildRedirectMessage('/', 'error', 'Task not found.'));
+    }
+
     await pool.query('DELETE FROM task_logs WHERE task_id = ?', [taskId]);
-    await pool.query('DELETE FROM tasks WHERE id = ?', [taskId]);
+    await pool.query('DELETE FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
 
     return res.redirect(buildRedirectMessage('/', 'success', 'Task deleted successfully.'));
   } catch (error) {
@@ -285,6 +310,7 @@ router.get('/delete/:id', async (req, res) => {
 });
 
 router.get('/start/:id', async (req, res) => {
+  const userId = getCurrentUserId(req);
   const taskId = Number(req.params.id);
 
   if (!taskId) {
@@ -292,7 +318,7 @@ router.get('/start/:id', async (req, res) => {
   }
 
   try {
-    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ?', [taskId]);
+    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
     const task = taskRows[0];
 
     if (!task) {
@@ -326,6 +352,7 @@ router.get('/start/:id', async (req, res) => {
 });
 
 router.get('/pause/:id', async (req, res) => {
+  const userId = getCurrentUserId(req);
   const taskId = Number(req.params.id);
 
   if (!taskId) {
@@ -333,7 +360,7 @@ router.get('/pause/:id', async (req, res) => {
   }
 
   try {
-    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ?', [taskId]);
+    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
     const task = taskRows[0];
 
     if (!task) {
@@ -370,6 +397,7 @@ router.get('/pause/:id', async (req, res) => {
 });
 
 router.get('/resume/:id', async (req, res) => {
+  const userId = getCurrentUserId(req);
   const taskId = Number(req.params.id);
 
   if (!taskId) {
@@ -377,7 +405,7 @@ router.get('/resume/:id', async (req, res) => {
   }
 
   try {
-    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ?', [taskId]);
+    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
     const task = taskRows[0];
 
     if (!task) {
@@ -411,6 +439,7 @@ router.get('/resume/:id', async (req, res) => {
 });
 
 router.get('/end/:id', async (req, res) => {
+  const userId = getCurrentUserId(req);
   const taskId = Number(req.params.id);
 
   if (!taskId) {
@@ -418,7 +447,7 @@ router.get('/end/:id', async (req, res) => {
   }
 
   try {
-    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ?', [taskId]);
+    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
     const task = taskRows[0];
 
     if (!task) {
