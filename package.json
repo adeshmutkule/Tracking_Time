@@ -1,0 +1,29 @@
+{
+  "name": "smart-work-time-tracker",
+  "version": "1.0.0",
+  "description": "Server-rendered time tracking app using Express, EJS, and MySQL",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "keywords": [
+    "express",
+    "ejs",
+    "mysql",
+    "time-tracker"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "exceljs": "^4.4.0",
+    "pdfkit": "^0.17.1",
+    "mysql2": "^3.14.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

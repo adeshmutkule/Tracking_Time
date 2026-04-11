@@ -1,0 +1,58 @@
+body {
+  background: linear-gradient(120deg, #f8fbff, #eef5ff);
+  min-height: 100vh;
+}
+
+h1 {
+  font-weight: 700;
+}
+
+.card {
+  border: none;
+  border-radius: 14px;
+}
+
+.action-buttons .btn {
+  margin: 2px;
+}
+
+.status-badge {
+  text-transform: capitalize;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.6rem;
+}
+
+.status-idle {
+  background-color: #6c757d;
+}
+
+.status-running {
+  background-color: #198754;
+}
+
+.status-paused {
+  background-color: #fd7e14;
+}
+
+.status-completed {
+  background-color: #0d6efd;
+}
+
+.report-hero {
+  background: linear-gradient(135deg, rgba(13, 110, 253, 0.1), rgba(25, 135, 84, 0.08));
+}
+
+.report-summary .badge {
+  font-size: 0.9rem;
+  padding: 0.55rem 0.8rem;
+}
+
+.report-actions .btn {
+  min-width: 140px;
+}
+
+@media (max-width: 575.98px) {
+  .report-actions .btn {
+    width: 100%;
+  }
+}
