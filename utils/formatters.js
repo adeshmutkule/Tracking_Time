@@ -1,5 +1,14 @@
 function formatSeconds(totalSeconds) {
-  const safeSeconds = Number(totalSeconds) || 0;
+  let safeSeconds = Number(totalSeconds) || 0;
+  
+  // Ensure non-negative value
+  if (safeSeconds < 0) {
+    safeSeconds = 0;
+  }
+  
+  // Convert to milliseconds to avoid floating point issues
+  safeSeconds = Math.floor(safeSeconds);
+  
   const hours = Math.floor(safeSeconds / 3600)
     .toString()
     .padStart(2, '0');

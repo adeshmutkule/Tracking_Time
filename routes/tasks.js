@@ -87,7 +87,11 @@ async function refreshTaskTotalTime(taskId) {
     [taskId]
   );
 
-  const totalTime = Number(sumRows[0].total_time || 0);
+  let totalTime = Number(sumRows[0].total_time || 0);
+  // Ensure total_time is never negative
+  if (totalTime < 0) {
+    totalTime = 0;
+  }
   await pool.query('UPDATE tasks SET total_time = ? WHERE id = ?', [totalTime, taskId]);
 }
 
