@@ -24,7 +24,11 @@
               <% } %>
             </p>
           </div>
-          <a href="/" class="btn btn-outline-secondary">Back to Dashboard</a>
+          <div class="d-flex gap-2 align-items-center">
+            <span class="small text-muted">User: <strong><%= currentUser.full_name %></strong></span>
+            <a href="/" class="btn btn-outline-secondary">Back to Dashboard</a>
+            <a href="/logout" class="btn btn-outline-danger">Logout</a>
+          </div>
         </div>
       </div>
 
