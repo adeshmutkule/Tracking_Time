@@ -66,8 +66,8 @@ function createPdfReportLayout(doc, reportDate, logs, totalDuration) {
   const startX = doc.page.margins.left;
   const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const rowHeight = 28;
-  const footerTopOffset = 76;
-  const columns = [
+  const taskNameColumnIndex = 1;
+  const baseColumns = [
     { label: '#', width: 35, align: 'left' },
     { label: 'Task Name', width: 170, align: 'left' },
     { label: 'Task Date', width: 95, align: 'left' },
@@ -76,15 +76,24 @@ function createPdfReportLayout(doc, reportDate, logs, totalDuration) {
     { label: 'Sessions', width: 70, align: 'right' },
     { label: 'Duration', width: 90, align: 'right' }
   ];
-  const supportDetails = [
-    'Adesh A Mutkule',
-    'Support Engineer',
-    '7066179197',
-    'adeshmutkule452@gmail.com'
-  ];
+  const baseWidthTotal = baseColumns.reduce((sum, column) => sum + column.width, 0);
+  const widthScale = usableWidth / baseWidthTotal;
+  const columns = baseColumns.map((column) => ({
+    ...column,
+    width: Math.max(Math.floor(column.width * widthScale), 32)
+  }));
+  const assignedWidth = columns.reduce((sum, column) => sum + column.width, 0);
+  columns[columns.length - 1].width += usableWidth - assignedWidth;
+
+  function sanitizeCellText(value) {
+    return String(value ?? '')
+      .replace(/[\r\n]+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
 
   function getFooterTopLimit() {
-    return doc.page.height - doc.page.margins.bottom - footerTopOffset;
+    return doc.page.height - doc.page.margins.bottom;
   }
 
   function drawHeader() {
@@ -107,8 +116,8 @@ function createPdfReportLayout(doc, reportDate, logs, totalDuration) {
   }
 
   function drawSummary(summaryTop) {
-    const chipWidth = 185;
     const gap = 12;
+    const chipWidth = Math.floor((usableWidth - gap * 2) / 3);
     const chips = [
       { title: 'Total Records', value: String(logs.length) },
       { title: 'Total Duration', value: formatSeconds(totalDuration) },
@@ -157,28 +166,6 @@ function createPdfReportLayout(doc, reportDate, logs, totalDuration) {
     return y + rowHeight;
   }
 
-  function drawFooter() {
-    const footerHeight = 62;
-    const footerTop = doc.page.height - doc.page.margins.bottom - footerHeight;
-
-    doc.save();
-    doc.roundedRect(startX, footerTop, usableWidth, footerHeight, 8).fill('#f8fafc');
-    doc.restore();
-
-    doc.fillColor('#0f4c81').font('Helvetica-Bold').fontSize(10).text('Support Contact', startX + 12, footerTop + 9);
-    doc.fillColor('#374151').font('Helvetica').fontSize(9).text(supportDetails.join(' | '), startX + 12, footerTop + 26, {
-      width: usableWidth - 24,
-      ellipsis: true
-    });
-
-    doc.fillColor('#6b7280').fontSize(8).text(`Page ${doc.bufferedPageRange().count}`, startX + usableWidth - 70, footerTop + 42, {
-      width: 58,
-      align: 'right'
-    });
-
-    doc.fillColor('#1f2937');
-  }
-
   function drawTotalBlock(y) {
     const blockHeight = 30;
     doc.save();
@@ -195,15 +182,17 @@ function createPdfReportLayout(doc, reportDate, logs, totalDuration) {
   }
 
   function drawRow(log, index, rowY) {
+    const currentRowHeight = getRowHeight(log);
+
     if (index % 2 === 0) {
       doc.save();
-      doc.rect(startX, rowY, usableWidth, rowHeight).fill('#fcfdff');
+      doc.rect(startX, rowY, usableWidth, currentRowHeight).fill('#fcfdff');
       doc.restore();
     }
 
     const cells = [
       String(index + 1),
-      log.task_name,
+      sanitizeCellText(log.task_name),
       formatReportDate(log.task_date),
       formatTimeOnly(log.start_time),
       log.end_time ? formatTimeOnly(log.end_time) : 'Running',
@@ -216,19 +205,37 @@ function createPdfReportLayout(doc, reportDate, logs, totalDuration) {
 
     cells.forEach((cell, cellIndex) => {
       doc.save();
-      doc.rect(currentX, rowY, columns[cellIndex].width, rowHeight).lineWidth(0.4).strokeColor('#dbe2ea').stroke();
+      doc.rect(currentX, rowY, columns[cellIndex].width, currentRowHeight).lineWidth(0.4).strokeColor('#dbe2ea').stroke();
       doc.restore();
 
-      doc.text(cell, currentX + 8, rowY + 6, {
+      // Clip text to each cell so long/multiline values never spill into adjacent rows.
+      doc.save();
+      doc.rect(currentX + 1, rowY + 1, columns[cellIndex].width - 2, currentRowHeight - 2).clip();
+      doc.text(sanitizeCellText(cell), currentX + 8, rowY + 6, {
         width: columns[cellIndex].width - 16,
+        height: currentRowHeight - 10,
         align: columns[cellIndex].align,
-        ellipsis: true,
-        lineBreak: false
+        ellipsis: cellIndex === taskNameColumnIndex ? false : true,
+        lineBreak: cellIndex === taskNameColumnIndex
       });
+      doc.restore();
       currentX += columns[cellIndex].width;
     });
 
-    return rowY + rowHeight;
+    return rowY + currentRowHeight;
+  }
+
+  function getRowHeight(log) {
+    const taskNameText = sanitizeCellText(log.task_name);
+
+    doc.font('Helvetica').fontSize(10);
+    const textHeight = doc.heightOfString(taskNameText, {
+      width: columns[taskNameColumnIndex].width - 16,
+      align: 'left',
+      lineBreak: true
+    });
+
+    return Math.max(rowHeight, Math.ceil(textHeight) + 10);
   }
 
   function drawPageChrome() {
@@ -240,9 +247,9 @@ function createPdfReportLayout(doc, reportDate, logs, totalDuration) {
 
   return {
     rowHeight,
+    getRowHeight,
     drawPageChrome,
     drawRow,
-    drawFooter,
     drawTotalBlock,
     getFooterTopLimit
   };
@@ -360,10 +367,10 @@ router.get('/report/export/pdf', async (req, res) => {
       doc.font('Helvetica').fontSize(11).fillColor('#4b5563').text('No sessions logged for the selected date.', startX + 8, rowY + 12);
     } else {
       logs.forEach((log, index) => {
+        const nextRowHeight = layout.getRowHeight(log);
         const footerTopLimit = layout.getFooterTopLimit();
 
-        if (rowY + layout.rowHeight > footerTopLimit) {
-          layout.drawFooter();
+        if (rowY + nextRowHeight > footerTopLimit) {
           doc.addPage();
           rowY = layout.drawPageChrome();
         }
@@ -373,13 +380,11 @@ router.get('/report/export/pdf', async (req, res) => {
     }
 
     if (rowY + 34 > layout.getFooterTopLimit()) {
-      layout.drawFooter();
       doc.addPage();
       rowY = layout.drawPageChrome();
     }
 
     layout.drawTotalBlock(rowY + 8);
-    layout.drawFooter();
 
     doc.end();
   } catch (error) {
