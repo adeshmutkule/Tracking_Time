@@ -1,7 +1,6 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const MySQLStore = require('express-mysql-session')(session);
 const fileUpload = require('express-fileupload');
 
 const { ensureSchema } = require('./config/db');
@@ -11,22 +10,15 @@ const reportRoutes = require('./routes/report');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Session configuration
-const sessionCookieName = 'sessionId';
-const sessionStore = new MySQLStore({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
-});
 const sessionCookie = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'Lax',
-  maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days
+  sameSite: process.env.SESSION_COOKIE_SAMESITE || 'lax'
 };
+
+if (process.env.SESSION_COOKIE_SECURE === 'true') {
+  app.set('trust proxy', 1);
+  sessionCookie.secure = true;
+}
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -46,9 +38,7 @@ app.use(
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(
   session({
-    name: sessionCookieName,
     secret: process.env.SESSION_SECRET || 'simple-session-secret',
-    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: sessionCookie

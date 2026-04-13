@@ -5,26 +5,6 @@ const { pool } = require('../config/db');
 const { requireGuest, requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
-const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'work_tracker.sid';
-
-function createSession(req, userData, onSuccess, onFailure) {
-  req.session.regenerate((regenerateError) => {
-    if (regenerateError) {
-      onFailure();
-      return;
-    }
-
-    req.session.user = userData;
-    req.session.save((saveError) => {
-      if (saveError) {
-        onFailure();
-        return;
-      }
-
-      onSuccess();
-    });
-  });
-}
 
 function saveProfileImage(file) {
   const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -96,18 +76,14 @@ router.post('/signup', requireGuest, async (req, res) => {
       [fullName, email, password, uploadResult.path]
     );
 
-    createSession(
-      req,
-      {
-        id: result.insertId,
-        full_name: fullName,
-        email,
-        profile_image: uploadResult.path
-      },
-      () => res.redirect('/?success=Account created successfully.'),
-      () => res.redirect('/signup?error=Unable to create account.')
-    );
-    return;
+    req.session.user = {
+      id: result.insertId,
+      full_name: fullName,
+      email,
+      profile_image: uploadResult.path
+    };
+
+    return res.redirect('/?success=Account created successfully.');
   } catch (error) {
     return res.redirect('/signup?error=Unable to create account.');
   }
@@ -140,18 +116,14 @@ router.post('/login', requireGuest, async (req, res) => {
       return res.redirect('/login?error=Invalid email or password.');
     }
 
-    createSession(
-      req,
-      {
-        id: user.id,
-        full_name: user.full_name,
-        email: user.email,
-        profile_image: user.profile_image || null
-      },
-      () => res.redirect('/?success=Login successful.'),
-      () => res.redirect('/login?error=Unable to login.')
-    );
-    return;
+    req.session.user = {
+      id: user.id,
+      full_name: user.full_name,
+      email: user.email,
+      profile_image: user.profile_image || null
+    };
+
+    return res.redirect('/?success=Login successful.');
   } catch (error) {
     return res.redirect('/login?error=Unable to login.');
   }
@@ -159,7 +131,6 @@ router.post('/login', requireGuest, async (req, res) => {
 
 router.get('/logout', requireAuth, (req, res) => {
   req.session.destroy(() => {
-    res.clearCookie(sessionCookieName);
     res.redirect('/login?success=Logged out successfully.');
   });
 });
