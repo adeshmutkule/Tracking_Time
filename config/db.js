@@ -1,10 +1,10 @@
 const mysql = require('mysql2/promise');
 
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'b6birk9jserfwl5snuay-mysql.services.clever-cloud.com',
-  user: process.env.DB_USER || 'uphcqrugzynhsltf',
-  password: process.env.DB_PASSWORD || 'VEHRk304SVjsRRpndZmE',
-  database: process.env.DB_NAME || 'b6birk9jserfwl5snuay',
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'work_tracker',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -19,6 +19,35 @@ async function ensureSchema() {
       password VARCHAR(255) NOT NULL,
       profile_image VARCHAR(255) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`
+  );
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS tasks (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      task_name VARCHAR(255) NOT NULL,
+      task_date DATE NOT NULL,
+      status ENUM('idle', 'running', 'paused', 'completed') NOT NULL DEFAULT 'idle',
+      total_time INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_tasks_user_id (user_id),
+      CONSTRAINT fk_tasks_user
+        FOREIGN KEY (user_id) REFERENCES users(id)
+        ON DELETE CASCADE
+    )`
+  );
+
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS task_logs (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      task_id INT NOT NULL,
+      start_time DATETIME NOT NULL,
+      end_time DATETIME NULL,
+      duration INT NOT NULL DEFAULT 0,
+      CONSTRAINT fk_task_logs_task
+        FOREIGN KEY (task_id) REFERENCES tasks(id)
+        ON DELETE CASCADE
     )`
   );
 

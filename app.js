@@ -11,28 +11,22 @@ const reportRoutes = require('./routes/report');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'work_tracker.sid';
-const sessionMaxAgeMs = Number(process.env.SESSION_MAX_AGE_MS || 1000 * 60 * 60 * 24 * 30);
+
+// Session configuration
+const sessionCookieName = 'sessionId';
 const sessionStore = new MySQLStore({
-  host: process.env.DB_HOST || 'b6birk9jserfwl5snuay-mysql.services.clever-cloud.com',
-  port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER || 'uphcqrugzynhsltf',
-  password: process.env.DB_PASSWORD || 'VEHRk304SVjsRRpndZmE',
-  database: process.env.DB_NAME || 'b6birk9jserfwl5snuay',
-  clearExpired: true,
-  checkExpirationInterval: 15 * 60 * 1000,
-  expiration: sessionMaxAgeMs,
-  createDatabaseTable: true
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME
 });
 const sessionCookie = {
   httpOnly: true,
-  sameSite: process.env.SESSION_COOKIE_SAMESITE || 'lax',
-  maxAge: sessionMaxAgeMs
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'Lax',
+  maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days
 };
-
-if (process.env.SESSION_COOKIE_SECURE === 'true') {
-  sessionCookie.secure = true;
-}
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
