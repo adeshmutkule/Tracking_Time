@@ -62,7 +62,7 @@ async function getReportSummary(userId, reportDate = '') {
   return { logs, totalDuration };
 }
 
-function createPdfReportLayout(doc, reportDate, logs, totalDuration) {
+function createPdfReportLayout(doc, reportDate, logs, totalDuration, reportOwnerName = '') {
   const startX = doc.page.margins.left;
   const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const rowHeight = 28;
@@ -98,11 +98,12 @@ function createPdfReportLayout(doc, reportDate, logs, totalDuration) {
 
   function drawHeader() {
     const bandTop = doc.page.margins.top;
+    const ownerName = String(reportOwnerName || 'User').trim() || 'User';
     doc.save();
     doc.roundedRect(startX, bandTop, usableWidth, 70, 10).fill('#0f4c81');
     doc.restore();
 
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(20).text('Adesh A Mutkule', startX + 18, bandTop + 14);
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(20).text(ownerName, startX + 18, bandTop + 14);
     doc.font('Helvetica').fontSize(11).text(reportDate ? `Daily Report Work - ${formatDayWithDate(reportDate)}` : 'Daily Report Work - All Dates', startX + 18, bandTop + 42);
 
     const generatedAt = new Date().toLocaleString('en-IN');
@@ -344,6 +345,7 @@ router.get('/report/export/excel', async (req, res) => {
 
 router.get('/report/export/pdf', async (req, res) => {
   const userId = Number(req.session.user?.id || 0);
+  const reportOwnerName = String(req.session.user?.full_name || '').trim();
 
   try {
     const reportDate = normalizeReportDate(req.query.date);
@@ -360,7 +362,7 @@ router.get('/report/export/pdf', async (req, res) => {
 
     doc.pipe(res);
     const startX = doc.page.margins.left;
-    const layout = createPdfReportLayout(doc, reportDate, logs, totalDuration);
+    const layout = createPdfReportLayout(doc, reportDate, logs, totalDuration, reportOwnerName);
     let rowY = layout.drawPageChrome();
 
     if (logs.length === 0) {
