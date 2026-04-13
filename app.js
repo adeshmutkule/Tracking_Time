@@ -14,11 +14,11 @@ const PORT = process.env.PORT || 3000;
 const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'work_tracker.sid';
 const sessionMaxAgeMs = Number(process.env.SESSION_MAX_AGE_MS || 1000 * 60 * 60 * 24 * 30);
 const sessionStore = new MySQLStore({
-  host: process.env.DB_HOST || 'localhost',
+  host: process.env.DB_HOST || 'b6birk9jserfwl5snuay-mysql.services.clever-cloud.com',
   port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'Adesh@123',
-  database: process.env.DB_NAME || 'work_tracker',
+  user: process.env.DB_USER || 'uphcqrugzynhsltf',
+  password: process.env.DB_PASSWORD || 'VEHRk304SVjsRRpndZmE',
+  database: process.env.DB_NAME || 'b6birk9jserfwl5snuay',
   clearExpired: true,
   checkExpirationInterval: 15 * 60 * 1000,
   expiration: sessionMaxAgeMs,
