@@ -1,24 +1,15 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Daily Report - Smart Work Time Tracker</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="/style.css" />
-  </head>
-  <body>
+<%- include('partials/page-start', {
+  pageTitle: 'Daily Report - Smart Work Time Tracker',
+  bodyClass: 'report-page'
+}) %>
     <div class="container py-4">
       <div class="card hero-card shadow-sm mb-4">
         <div class="card-body">
-          <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-start align-items-lg-center">
-            <div>
-              <p class="eyebrow mb-2">Report Center</p>
-              <h1 class="mb-1">Daily Report</h1>
-              <p class="text-muted mb-0">
+          <div class="d-flex flex-column flex-xl-row justify-content-between gap-3 align-items-start align-items-xl-center">
+            <div class="hero-copy">
+              <p class="eyebrow mb-2">A2Z TIME TRACKING SYSTEM</p>
+              <h1 class="mb-2 hero-title">Daily Report</h1>
+              <p class="text-muted mb-0 hero-subtitle">
                 <% if (selectedDate) { %>
                 Showing data for <strong><%= formatDayWithDate(selectedDate) %></strong>
                 <% } else { %>
@@ -26,10 +17,24 @@
                 <% } %>
               </p>
             </div>
-            <div class="header-actions d-flex flex-column flex-sm-row gap-2 w-100 w-lg-auto align-items-stretch align-items-sm-center">
-              <span class="user-chip text-truncate">User: <strong><%= currentUser.full_name %></strong></span>
-              <a href="/" class="btn btn-outline-secondary">Back to Dashboard</a>
-              <a href="/logout" class="btn btn-outline-danger">Logout</a>
+
+            <div class="header-actions d-flex flex-column flex-sm-row gap-2 w-100 w-xl-auto align-items-stretch align-items-sm-center">
+              <span class="user-chip text-truncate text-success">User: <strong><%= currentUser.full_name %></strong></span>
+            </div>
+          </div>
+
+          <div class="hero-metrics mt-3">
+            <div class="hero-metric-item">
+              <span class="hero-metric-label">Records</span>
+              <strong class="hero-metric-value"><%= logs.length %></strong>
+            </div>
+            <div class="hero-metric-item">
+              <span class="hero-metric-label">Selected Day</span>
+              <strong class="hero-metric-value"><%= selectedDate ? selectedDate.split('-').reverse().join('-') : 'Select a date' %></strong>
+            </div>
+            <div class="hero-metric-item">
+              <span class="hero-metric-label">Total Duration</span>
+              <strong class="hero-metric-value"><%= formatSeconds(totalDuration || 0) %></strong>
             </div>
           </div>
         </div>
@@ -37,6 +42,10 @@
 
       <div class="card shadow-sm mb-4 task-card">
         <div class="card-body">
+          <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-2 mb-2">
+            <h5 class="card-title mb-0">Report Filters</h5>
+            <p class="text-muted mb-0 small">Choose a date and export polished reports in Excel or PDF.</p>
+          </div>
           <form action="/report" method="GET" class="row g-3 align-items-end task-form report-toolbar">
             <div class="col-12 col-md-4 col-lg-3">
               <label for="date" class="form-label">Select Date</label>
@@ -81,9 +90,10 @@
           <div class="report-summary mb-3 d-flex flex-wrap gap-2">
             <span class="badge text-bg-light">Records: <%= logs.length %></span>
             <span class="badge text-bg-light">Report Day: <%= selectedDate ? formatDayWithDate(selectedDate) : 'Select a date' %></span>
+            <span class="badge  bg-dark text-white">Total: <%= formatSeconds(totalDuration || 0) %></span>
           </div>
-          <div class="table-responsive">
-            <table class="table table-bordered table-hover align-middle mb-0">
+          <div class="table-responsive report-table-wrap">
+            <table class="table table-striped align-middle mb-0 report-table">
               <thead>
                 <tr>
                   <th>#</th>
@@ -115,7 +125,7 @@
                 <% }) %>
               </tbody>
               <tfoot>
-                <tr class="table-success">
+                <tr class="report-total-row">
                   <th colspan="6" class="text-end">Total Daily Work Duration</th>
                   <th><%= formatSeconds(totalDuration || 0) %></th>
                 </tr>
@@ -125,5 +135,4 @@
         </div>
       </div>
     </div>
-  </body>
-</html>
+<%- include('partials/page-end') %>

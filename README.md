@@ -1,17 +1,16 @@
 # Smart Work Time Tracker
 
-A server-rendered Node.js time-tracking app using Express, EJS, body-parser, and MySQL.
+Smart Work Time Tracker is a server-rendered web application for managing tasks, running timers, and generating daily reports.
 
-Now supports multi-user login/signup. Each user's tasks and reports are stored and shown separately.
+The app supports multi-user authentication and isolates each user's tasks and logs.
 
-## Tech Stack
+## Stack
 
-- Node.js
-- Express.js
-- body-parser
-- EJS
-- MySQL
-- Bootstrap
+- Node.js + Express
+- EJS templates
+- MySQL (mysql2)
+- Bootstrap + custom CSS
+- ExcelJS and PDFKit for exports
 
 ## 1. Create Database
 
@@ -56,16 +55,16 @@ CREATE TABLE IF NOT EXISTS task_logs (
 npm install
 ```
 
-## 3. Configure Database Connection (Optional)
+## 3. Configure Environment
 
-The app reads these environment variables (defaults shown):
+The app reads these environment variables:
 
-- `DB_HOST=localhost`
-- `DB_USER=root`
-- `DB_PASSWORD=`
-- `DB_NAME=work_tracker`
-- `PORT=3000`
-- `SESSION_SECRET=simple-session-secret`
+- DB_HOST=localhost
+- DB_USER=root
+- DB_PASSWORD=
+- DB_NAME=work_tracker
+- PORT=3000
+- SESSION_SECRET=simple-session-secret
 
 Example (PowerShell):
 
@@ -85,7 +84,22 @@ npm start
 
 Then open:
 
-- `http://localhost:3000`
+- http://localhost:3000
+
+For development mode:
+
+```bash
+npm run dev
+```
+
+## Features
+
+- Add tasks with start time
+- Start, pause, resume, and end task sessions
+- Edit task details and latest session time
+- Filter tasks by date, status, and text search
+- Daily report with total duration
+- Export selected date report to Excel and PDF
 
 ## Reports and Export
 
@@ -96,26 +110,25 @@ The report page also supports:
 - Excel download for the selected date or all dates
 - PDF download for the selected date or all dates
 
-## Routes
+## Main Routes
 
-- `GET /`
-- `GET /signup`
-- `POST /signup`
-- `GET /login`
-- `POST /login`
-- `GET /logout`
-- `POST /add-task`
-- `GET /delete/:id`
-- `GET /start/:id`
-- `GET /pause/:id`
-- `GET /resume/:id`
-- `GET /end/:id`
-- `GET /report`
-- `GET /report/export/excel`
-- `GET /report/export/pdf`
+- GET /
+- GET /signup
+- POST /signup
+- GET /login
+- POST /login
+- GET /logout
+- GET /tasks
+- POST /add-task
+- GET /task/:id/edit
+- POST /task/:id/edit
+- GET /delete/:id
+- GET /start/:id
+- GET /pause/:id
+- GET /resume/:id
+- GET /end/:id
+- GET /report
+- GET /report/export/excel
+- GET /report/export/pdf
 
-All actions use form submissions/URL routes and redirect with `res.redirect()`.
-"# Tracking_Time_App" 
-"# Tracking_Time_App" 
-"# Tracking_Time" 
-"# Tracking_Time" 
+All actions are server-rendered and redirect-based.

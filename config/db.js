@@ -1,10 +1,10 @@
 const mysql = require('mysql2/promise');
 
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'b6birk9jserfwl5snuay-mysql.services.clever-cloud.com',
-  user: process.env.DB_USER || 'uphcqrugzynhsltf',
-  password: process.env.DB_PASSWORD || 'VEHRk304SVjsRRpndZmE',
-  database: process.env.DB_NAME || 'b6birk9jserfwl5snuay',
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'Adesh@123',
+  database: process.env.DB_NAME || 'work_tracker',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -17,9 +17,22 @@ async function ensureSchema() {
       full_name VARCHAR(120) NOT NULL,
       email VARCHAR(190) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
+      profile_image VARCHAR(255) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`
   );
+
+  const [profileImageColumnRows] = await pool.query(
+    `SELECT COUNT(*) AS total
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'users'
+       AND COLUMN_NAME = 'profile_image'`
+  );
+
+  if (Number(profileImageColumnRows[0]?.total || 0) === 0) {
+    await pool.query('ALTER TABLE users ADD COLUMN profile_image VARCHAR(255) NULL AFTER password');
+  }
 
   const [userCountRows] = await pool.query('SELECT COUNT(*) AS total FROM users');
 

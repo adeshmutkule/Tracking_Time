@@ -4,16 +4,46 @@ const { pool } = require('../config/db');
 const {
   formatSeconds,
   buildRedirectMessage,
-  normalizeReportDate
+  normalizeReportDate,
+  formatReportDate
 } = require('../utils/formatters');
 const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
+const TASK_LIST_PATH = '/tasks';
 
 router.use(requireAuth);
 
 function getCurrentUserId(req) {
   return Number(req.session.user?.id || 0);
+}
+
+function getTaskId(taskIdParam) {
+  return Number(taskIdParam);
+}
+
+function ensureValidTaskIdOrRedirect(taskId, res) {
+  if (taskId) {
+    return true;
+  }
+
+  res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Invalid task ID.'));
+  return false;
+}
+
+async function fetchTaskByUser(taskId, userId) {
+  const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ? AND user_id = ? LIMIT 1', [taskId, userId]);
+  return taskRows[0] || null;
+}
+
+async function fetchOpenTaskLog(taskId, includeStartTime = false) {
+  const columns = includeStartTime ? 'id, start_time' : 'id';
+  const [activeRows] = await pool.query(
+    `SELECT ${columns} FROM task_logs WHERE task_id = ? AND end_time IS NULL ORDER BY id DESC LIMIT 1`,
+    [taskId]
+  );
+
+  return activeRows[0] || null;
 }
 
 function normalizeTimeValue(timeValue) {
@@ -81,6 +111,14 @@ function toDateInputValue(dateValue) {
   return `${year}-${month}-${day}`;
 }
 
+function getLocalTodayDate() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 async function refreshTaskTotalTime(taskId) {
   const [sumRows] = await pool.query(
     'SELECT IFNULL(SUM(duration), 0) AS total_time FROM task_logs WHERE task_id = ?',
@@ -97,16 +135,119 @@ async function refreshTaskTotalTime(taskId) {
 
 router.get('/', async (req, res) => {
   const userId = getCurrentUserId(req);
+  const selectedDate = normalizeReportDate(req.query.date) || getLocalTodayDate();
 
   try {
-    const [tasks] = await pool.query(
-      'SELECT * FROM tasks WHERE user_id = ? ORDER BY created_at DESC, id DESC',
+    const [suggestionRows] = await pool.query(
+      `SELECT recent.task_name
+       FROM (
+         SELECT task_name, MAX(created_at) AS last_used_at
+         FROM tasks
+         WHERE user_id = ?
+         GROUP BY task_name
+       ) recent
+       ORDER BY recent.last_used_at DESC
+       LIMIT 8`,
       [userId]
     );
 
-    res.render('index', {
+    const [todayTotalRows] = await pool.query(
+      `SELECT
+         COALESCE(
+           SUM(
+             CASE
+               WHEN l.end_time IS NULL THEN GREATEST(TIMESTAMPDIFF(SECOND, l.start_time, NOW()), 0)
+               ELSE GREATEST(IFNULL(l.duration, 0), 0)
+             END
+           ),
+           0
+         ) AS total_seconds,
+         COALESCE(SUM(CASE WHEN l.end_time IS NULL THEN 1 ELSE 0 END), 0) AS active_session_count
+       FROM task_logs l
+       INNER JOIN tasks t ON t.id = l.task_id
+       WHERE t.user_id = ? AND DATE(t.task_date) = CURDATE()`,
+      [userId]
+    );
+
+    const todayTotalSeconds = Number(todayTotalRows[0]?.total_seconds || 0);
+    const activeSessionCount = Number(todayTotalRows[0]?.active_session_count || 0);
+
+    return res.render('index', {
+      selectedDate,
+      formatSeconds,
+      taskNameSuggestions: suggestionRows.map((row) => row.task_name).filter(Boolean),
+      todayTotalSeconds,
+      activeSessionCount,
+      error: req.query.error || '',
+      success: req.query.success || ''
+    });
+  } catch (error) {
+    return res.status(500).send('Unable to load dashboard. Check database connection.');
+  }
+});
+
+router.get('/tasks', async (req, res) => {
+  const userId = getCurrentUserId(req);
+  const selectedDate = normalizeReportDate(req.query.date) || getLocalTodayDate();
+  const rawStatus = String(req.query.status || 'all').trim().toLowerCase();
+  const searchTerm = String(req.query.search || '').trim();
+  const allowedStatuses = new Set(['all', 'idle', 'running', 'paused', 'completed']);
+  const selectedStatus = allowedStatuses.has(rawStatus) ? rawStatus : 'all';
+
+  try {
+    const queryParams = [userId, selectedDate];
+    const statusClause = selectedStatus === 'all' ? '' : ' AND t.status = ?';
+    const searchClause = searchTerm ? ' AND t.task_name LIKE ?' : '';
+
+    if (selectedStatus !== 'all') {
+      queryParams.push(selectedStatus);
+    }
+
+    if (searchTerm) {
+      queryParams.push(`%${searchTerm}%`);
+    }
+
+    const [tasks] = await pool.query(
+      `SELECT
+         t.*,
+         (
+           SELECT TIME_FORMAT(l.start_time, '%H:%i')
+           FROM task_logs l
+           WHERE l.task_id = t.id
+           ORDER BY l.id DESC
+           LIMIT 1
+         ) AS latest_start_time,
+         (
+           SELECT TIME_FORMAT(l.end_time, '%H:%i')
+           FROM task_logs l
+           WHERE l.task_id = t.id
+           ORDER BY l.id DESC
+           LIMIT 1
+         ) AS latest_end_time,
+         GREATEST(
+           t.total_time + IFNULL(
+             (
+               SELECT SUM(GREATEST(TIMESTAMPDIFF(SECOND, l.start_time, NOW()), 0))
+               FROM task_logs l
+               WHERE l.task_id = t.id AND l.end_time IS NULL
+             ),
+             0
+           ),
+           0
+         ) AS display_total_time
+       FROM tasks t
+       WHERE t.user_id = ? AND DATE(t.task_date) = ?${statusClause}${searchClause}
+       ORDER BY t.created_at DESC, t.id DESC`,
+      queryParams
+    );
+
+    res.render('tasks', {
       tasks,
       formatSeconds,
+      formatReportDate,
+      selectedDate,
+      selectedStatus,
+      searchTerm,
       error: req.query.error || '',
       success: req.query.success || ''
     });
@@ -123,15 +264,15 @@ router.post('/add-task', async (req, res) => {
   const startDateTime = buildStartDateTime(taskDate, startTime);
 
   if (!taskName) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Task name cannot be empty.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task name cannot be empty.'));
   }
 
   if (!taskDate) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Task date is required.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task date is required.'));
   }
 
   if (!startTime || !startDateTime) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Valid start time is required.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Valid start time is required.'));
   }
 
   try {
@@ -154,9 +295,9 @@ router.post('/add-task', async (req, res) => {
       connection.release();
     }
 
-    return res.redirect(buildRedirectMessage('/', 'success', 'Task added and started successfully.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'success', 'Task added and started successfully.'));
   } catch (error) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Failed to add task.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Failed to add task.'));
   }
 });
 
@@ -165,7 +306,7 @@ router.get('/task/:id/edit', async (req, res) => {
   const taskId = Number(req.params.id);
 
   if (!taskId) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Invalid task ID.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Invalid task ID.'));
   }
 
   try {
@@ -173,7 +314,7 @@ router.get('/task/:id/edit', async (req, res) => {
     const task = taskRows[0];
 
     if (!task) {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Task not found.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task not found.'));
     }
 
     const [latestLogRows] = await pool.query(
@@ -190,7 +331,7 @@ router.get('/task/:id/edit', async (req, res) => {
       error: req.query.error || ''
     });
   } catch (error) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Unable to open edit form.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Unable to open edit form.'));
   }
 });
 
@@ -206,7 +347,7 @@ router.post('/task/:id/edit', async (req, res) => {
   const endDateTime = buildEndDateTime(taskDate, endTime);
 
   if (!taskId) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Invalid task ID.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Invalid task ID.'));
   }
 
   if (!taskName) {
@@ -242,7 +383,7 @@ router.post('/task/:id/edit', async (req, res) => {
 
       if (!taskRows[0]) {
         await connection.rollback();
-        return res.redirect(buildRedirectMessage('/', 'error', 'Task not found.'));
+        return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task not found.'));
       }
 
       await connection.query('UPDATE tasks SET task_name = ?, task_date = ? WHERE id = ?', [taskName, taskDate, taskId]);
@@ -283,7 +424,7 @@ router.post('/task/:id/edit', async (req, res) => {
     }
 
     await refreshTaskTotalTime(taskId);
-    return res.redirect(buildRedirectMessage('/', 'success', 'Task updated successfully.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'success', 'Task updated successfully.'));
   } catch (error) {
     return res.redirect(buildRedirectMessage(`/task/${taskId}/edit`, 'error', 'Failed to update task.'));
   }
@@ -291,199 +432,183 @@ router.post('/task/:id/edit', async (req, res) => {
 
 router.get('/delete/:id', async (req, res) => {
   const userId = getCurrentUserId(req);
-  const taskId = Number(req.params.id);
+  const taskId = getTaskId(req.params.id);
 
-  if (!taskId) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Invalid task ID.'));
+  if (!ensureValidTaskIdOrRedirect(taskId, res)) {
+    return;
   }
 
   try {
-    const [taskRows] = await pool.query('SELECT id FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
+    const task = await fetchTaskByUser(taskId, userId);
 
-    if (!taskRows[0]) {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Task not found.'));
+    if (!task) {
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task not found.'));
     }
 
     await pool.query('DELETE FROM task_logs WHERE task_id = ?', [taskId]);
     await pool.query('DELETE FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
 
-    return res.redirect(buildRedirectMessage('/', 'success', 'Task deleted successfully.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'success', 'Task deleted successfully.'));
   } catch (error) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Failed to delete task.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Failed to delete task.'));
   }
 });
 
 router.get('/start/:id', async (req, res) => {
   const userId = getCurrentUserId(req);
-  const taskId = Number(req.params.id);
+  const taskId = getTaskId(req.params.id);
 
-  if (!taskId) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Invalid task ID.'));
+  if (!ensureValidTaskIdOrRedirect(taskId, res)) {
+    return;
   }
 
   try {
-    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
-    const task = taskRows[0];
+    const task = await fetchTaskByUser(taskId, userId);
 
     if (!task) {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Task not found.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task not found.'));
     }
 
     if (task.status === 'running') {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Task is already running.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task is already running.'));
     }
 
     if (task.status === 'completed') {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Completed task cannot be started again.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Completed task cannot be started again.'));
     }
 
-    const [activeRows] = await pool.query(
-      'SELECT id FROM task_logs WHERE task_id = ? AND end_time IS NULL ORDER BY id DESC LIMIT 1',
-      [taskId]
-    );
+    const activeLog = await fetchOpenTaskLog(taskId);
 
-    if (activeRows.length > 0) {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Only one active session is allowed per task.'));
+    if (activeLog) {
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Only one active session is allowed per task.'));
     }
 
     await pool.query('INSERT INTO task_logs (task_id, start_time) VALUES (?, NOW())', [taskId]);
     await pool.query('UPDATE tasks SET status = ? WHERE id = ?', ['running', taskId]);
 
-    return res.redirect(buildRedirectMessage('/', 'success', 'Task started.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'success', 'Task started.'));
   } catch (error) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Failed to start task.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Failed to start task.'));
   }
 });
 
 router.get('/pause/:id', async (req, res) => {
   const userId = getCurrentUserId(req);
-  const taskId = Number(req.params.id);
+  const taskId = getTaskId(req.params.id);
 
-  if (!taskId) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Invalid task ID.'));
+  if (!ensureValidTaskIdOrRedirect(taskId, res)) {
+    return;
   }
 
   try {
-    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
-    const task = taskRows[0];
+    const task = await fetchTaskByUser(taskId, userId);
 
     if (!task) {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Task not found.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task not found.'));
     }
 
     if (task.status !== 'running') {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Cannot pause a task that is not running.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Cannot pause a task that is not running.'));
     }
 
-    const [activeRows] = await pool.query(
-      'SELECT id, start_time FROM task_logs WHERE task_id = ? AND end_time IS NULL ORDER BY id DESC LIMIT 1',
-      [taskId]
-    );
+    const activeLog = await fetchOpenTaskLog(taskId, true);
 
-    if (activeRows.length === 0) {
-      return res.redirect(buildRedirectMessage('/', 'error', 'No active session to pause.'));
+    if (!activeLog) {
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'No active session to pause.'));
     }
 
-    const logId = activeRows[0].id;
+    const logId = activeLog.id;
 
     await pool.query(
-      'UPDATE task_logs SET end_time = NOW(), duration = TIMESTAMPDIFF(SECOND, start_time, NOW()) WHERE id = ?',
+      'UPDATE task_logs SET end_time = NOW(), duration = GREATEST(TIMESTAMPDIFF(SECOND, start_time, NOW()), 0) WHERE id = ?',
       [logId]
     );
 
     await refreshTaskTotalTime(taskId);
     await pool.query('UPDATE tasks SET status = ? WHERE id = ?', ['paused', taskId]);
 
-    return res.redirect(buildRedirectMessage('/', 'success', 'Task paused.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'success', 'Task paused.'));
   } catch (error) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Failed to pause task.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Failed to pause task.'));
   }
 });
 
 router.get('/resume/:id', async (req, res) => {
   const userId = getCurrentUserId(req);
-  const taskId = Number(req.params.id);
+  const taskId = getTaskId(req.params.id);
 
-  if (!taskId) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Invalid task ID.'));
+  if (!ensureValidTaskIdOrRedirect(taskId, res)) {
+    return;
   }
 
   try {
-    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
-    const task = taskRows[0];
+    const task = await fetchTaskByUser(taskId, userId);
 
     if (!task) {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Task not found.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task not found.'));
     }
 
     if (task.status === 'running') {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Task is already running.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task is already running.'));
     }
 
     if (task.status !== 'paused') {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Cannot resume a task that is not paused.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Cannot resume a task that is not paused.'));
     }
 
-    const [activeRows] = await pool.query(
-      'SELECT id FROM task_logs WHERE task_id = ? AND end_time IS NULL ORDER BY id DESC LIMIT 1',
-      [taskId]
-    );
+    const activeLog = await fetchOpenTaskLog(taskId);
 
-    if (activeRows.length > 0) {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Only one active session is allowed per task.'));
+    if (activeLog) {
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Only one active session is allowed per task.'));
     }
 
     await pool.query('INSERT INTO task_logs (task_id, start_time) VALUES (?, NOW())', [taskId]);
     await pool.query('UPDATE tasks SET status = ? WHERE id = ?', ['running', taskId]);
 
-    return res.redirect(buildRedirectMessage('/', 'success', 'Task resumed.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'success', 'Task resumed.'));
   } catch (error) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Failed to resume task.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Failed to resume task.'));
   }
 });
 
 router.get('/end/:id', async (req, res) => {
   const userId = getCurrentUserId(req);
-  const taskId = Number(req.params.id);
+  const taskId = getTaskId(req.params.id);
 
-  if (!taskId) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Invalid task ID.'));
+  if (!ensureValidTaskIdOrRedirect(taskId, res)) {
+    return;
   }
 
   try {
-    const [taskRows] = await pool.query('SELECT * FROM tasks WHERE id = ? AND user_id = ?', [taskId, userId]);
-    const task = taskRows[0];
+    const task = await fetchTaskByUser(taskId, userId);
 
     if (!task) {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Task not found.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task not found.'));
     }
 
     if (task.status === 'idle') {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Cannot end a task that has not been started.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Cannot end a task that has not been started.'));
     }
 
     if (task.status === 'completed') {
-      return res.redirect(buildRedirectMessage('/', 'error', 'Task is already completed.'));
+      return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Task is already completed.'));
     }
 
-    const [activeRows] = await pool.query(
-      'SELECT id FROM task_logs WHERE task_id = ? AND end_time IS NULL ORDER BY id DESC LIMIT 1',
-      [taskId]
-    );
+    const activeLog = await fetchOpenTaskLog(taskId);
 
-    if (activeRows.length > 0) {
+    if (activeLog) {
       await pool.query(
-        'UPDATE task_logs SET end_time = NOW(), duration = TIMESTAMPDIFF(SECOND, start_time, NOW()) WHERE id = ?',
-        [activeRows[0].id]
+        'UPDATE task_logs SET end_time = NOW(), duration = GREATEST(TIMESTAMPDIFF(SECOND, start_time, NOW()), 0) WHERE id = ?',
+        [activeLog.id]
       );
     }
 
     await refreshTaskTotalTime(taskId);
     await pool.query('UPDATE tasks SET status = ? WHERE id = ?', ['completed', taskId]);
 
-    return res.redirect(buildRedirectMessage('/', 'success', 'Task ended and marked as completed.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'success', 'Task ended and marked as completed.'));
   } catch (error) {
-    return res.redirect(buildRedirectMessage('/', 'error', 'Failed to end task.'));
+    return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Failed to end task.'));
   }
 });
 

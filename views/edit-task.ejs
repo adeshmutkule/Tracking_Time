@@ -1,16 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Edit Task - Smart Work Time Tracker</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="/style.css" />
-  </head>
-  <body>
+<%- include('partials/page-start', {
+  pageTitle: 'Edit Task - Smart Work Time Tracker',
+  bodyClass: 'edit-task-page'
+}) %>
     <div class="container py-4">
       <div class="card hero-card shadow-sm mb-4">
         <div class="card-body">
@@ -22,16 +13,12 @@
             </div>
             <div class="header-actions d-flex flex-column flex-sm-row gap-2 w-100 w-lg-auto align-items-stretch align-items-sm-center">
               <span class="user-chip text-truncate">User: <strong><%= currentUser.full_name %></strong></span>
-              <a href="/" class="btn btn-outline-secondary">Back</a>
-              <a href="/logout" class="btn btn-outline-danger">Logout</a>
             </div>
           </div>
         </div>
       </div>
 
-      <% if (error) { %>
-      <div class="alert alert-danger"><%= error %></div>
-      <% } %>
+      <%- include('partials/flash-messages', { error: error, success: '' }) %>
 
       <div class="card shadow-sm task-card">
         <div class="card-body">
@@ -89,5 +76,4 @@
       </p>
       <% } %>
     </div>
-  </body>
-</html>
+<%- include('partials/page-end') %>

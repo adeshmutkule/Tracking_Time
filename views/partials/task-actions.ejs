@@ -1,0 +1,31 @@
+<a href="/task/<%= task.id %>/edit" class="btn btn-sm btn-primary">Edit</a>
+<% if (task.status === 'running' || task.status === 'completed') { %>
+<span class="btn btn-sm btn-success disabled" aria-disabled="true">Start</span>
+<% } else { %>
+<a href="/start/<%= task.id %>" class="btn btn-sm btn-success">Start</a>
+<% } %>
+
+<% if (task.status !== 'running') { %>
+<span class="btn btn-sm btn-warning disabled" aria-disabled="true">Pause</span>
+<% } else { %>
+<a href="/pause/<%= task.id %>" class="btn btn-sm btn-warning">Pause</a>
+<% } %>
+
+<% if (task.status !== 'paused') { %>
+<span class="btn btn-sm btn-info text-white disabled" aria-disabled="true">Resume</span>
+<% } else { %>
+<a href="/resume/<%= task.id %>" class="btn btn-sm btn-info text-white">Resume</a>
+<% } %>
+
+<% if (task.status === 'idle' || task.status === 'completed') { %>
+<span class="btn btn-sm btn-dark disabled" aria-disabled="true">End</span>
+<% } else { %>
+<a href="/end/<%= task.id %>" class="btn btn-sm btn-dark">End</a>
+<% } %>
+<a
+  href="/delete/<%= task.id %>"
+  class="btn btn-sm btn-danger"
+  onclick="return confirm('Delete this task and all logs?')"
+>
+  Delete
+</a>

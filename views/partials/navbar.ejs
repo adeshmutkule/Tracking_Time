@@ -1,0 +1,69 @@
+<nav class="navbar navbar-expand-lg navbar-light app-navbar sticky-top">
+  <div class="container">
+    <a class="navbar-brand app-brand" href="<%= currentUser ? '/tasks' : '/login' %>">
+      Smart Work Tracker
+    </a>
+
+    <button
+      class="navbar-toggler"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#appNavbar"
+      aria-controls="appNavbar"
+      aria-expanded="false"
+      aria-label="Toggle navigation"
+    >
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="appNavbar">
+      <% if (currentUser) { %>
+      <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center gap-lg-2">
+        <li class="nav-item">
+          <a class="nav-link app-nav-link" href="/">Dashboard</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link app-nav-link" href="/tasks">Tasks</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link app-nav-link" href="/report">Reports</a>
+        </li>
+        <li class="nav-item">
+          <span class="navbar-text app-user-pill">Hi, <strong><%= currentUser.full_name %></strong></span>
+        </li>
+        <li class="nav-item dropdown app-profile-menu">
+          <button
+            class="btn app-profile-toggle dropdown-toggle"
+            type="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+          >
+            <% if (currentUser.profile_image) { %>
+            <img src="<%= currentUser.profile_image %>" alt="Profile" class="app-profile-avatar" />
+            <% } else { %>
+            <span class="app-profile-avatar app-profile-fallback">
+              <%= String(currentUser.full_name || 'U').trim().charAt(0).toUpperCase() %>
+            </span>
+            <% } %>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li class="dropdown-header"><%= currentUser.full_name %></li>
+            <li><hr class="dropdown-divider" /></li>
+            <li><a href="/profile" class="dropdown-item">My Profile</a></li>
+            <li><a href="/logout" class="dropdown-item text-danger">Logout</a></li>
+          </ul>
+        </li>
+      </ul>
+      <% } else { %>
+      <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center gap-lg-2">
+        <li class="nav-item">
+          <a class="nav-link app-nav-link" href="/login">Login</a>
+        </li>
+        <li class="nav-item">
+          <a href="/signup" class="btn btn-sm btn-primary ms-lg-2">Create Account</a>
+        </li>
+      </ul>
+      <% } %>
+    </div>
+  </div>
+</nav>

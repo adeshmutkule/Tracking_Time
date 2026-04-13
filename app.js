@@ -1,7 +1,7 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const path = require('path');
 const session = require('express-session');
+const fileUpload = require('express-fileupload');
 
 const { ensureSchema } = require('./config/db');
 const authRoutes = require('./routes/auth');
@@ -14,7 +14,18 @@ const PORT = process.env.PORT || 3000;
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-app.use(bodyParser.urlencoded({ extended: true }));
+app.disable('x-powered-by');
+app.set('view cache', process.env.NODE_ENV === 'production');
+
+app.use(express.urlencoded({ extended: true }));
+app.use(
+  fileUpload({
+    limits: { fileSize: 2 * 1024 * 1024 },
+    abortOnLimit: true,
+    createParentPath: true,
+    useTempFiles: false
+  })
+);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(
   session({
@@ -32,6 +43,24 @@ app.use((req, res, next) => {
 app.use('/', authRoutes);
 app.use('/', taskRoutes);
 app.use('/', reportRoutes);
+
+app.use((req, res) => {
+  if (req.session.user) {
+    return res.redirect('/tasks');
+  }
+
+  return res.redirect('/login');
+});
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  console.error('Unhandled server error:', error);
+
+  return res.status(500).send('Something went wrong. Please try again.');
+});
 
 async function startServer() {
   try {

@@ -1,9 +1,37 @@
 const express = require('express');
+const path = require('path');
 
 const { pool } = require('../config/db');
 const { requireGuest, requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
+
+function saveProfileImage(file) {
+  const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+  if (!file || !file.name) {
+    return { ok: true, path: null };
+  }
+
+  if (!allowedMimeTypes.includes(file.mimetype)) {
+    return { ok: false, error: 'Only JPG, PNG, or WEBP images are allowed.' };
+  }
+
+  const fileExtByType = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp'
+  };
+  const safeFileName = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${fileExtByType[file.mimetype] || '.jpg'}`;
+  const relativePath = `/uploads/profiles/${safeFileName}`;
+  const absolutePath = path.join(__dirname, '..', 'public', 'uploads', 'profiles', safeFileName);
+
+  return {
+    ok: true,
+    path: relativePath,
+    move: () => file.mv(absolutePath)
+  };
+}
 
 router.get('/signup', requireGuest, (req, res) => {
   res.render('signup', {
@@ -16,9 +44,24 @@ router.post('/signup', requireGuest, async (req, res) => {
   const fullName = String(req.body.full_name || '').trim();
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '').trim();
+  const profileImage = req.files?.profile_image;
 
   if (!fullName || !email || !password) {
     return res.redirect('/signup?error=Please fill all fields.');
+  }
+
+  const uploadResult = saveProfileImage(profileImage);
+
+  if (!uploadResult.ok) {
+    return res.redirect(`/signup?error=${encodeURIComponent(uploadResult.error)}`);
+  }
+
+  if (uploadResult.move) {
+    try {
+      await uploadResult.move();
+    } catch (uploadError) {
+      return res.redirect('/signup?error=Unable to upload profile image.');
+    }
   }
 
   try {
@@ -29,14 +72,15 @@ router.post('/signup', requireGuest, async (req, res) => {
     }
 
     const [result] = await pool.query(
-      'INSERT INTO users (full_name, email, password) VALUES (?, ?, ?)',
-      [fullName, email, password]
+      'INSERT INTO users (full_name, email, password, profile_image) VALUES (?, ?, ?, ?)',
+      [fullName, email, password, uploadResult.path]
     );
 
     req.session.user = {
       id: result.insertId,
       full_name: fullName,
-      email
+      email,
+      profile_image: uploadResult.path
     };
 
     return res.redirect('/?success=Account created successfully.');
@@ -62,7 +106,7 @@ router.post('/login', requireGuest, async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      'SELECT id, full_name, email, password FROM users WHERE email = ? LIMIT 1',
+      'SELECT id, full_name, email, password, profile_image FROM users WHERE email = ? LIMIT 1',
       [email]
     );
 
@@ -75,7 +119,8 @@ router.post('/login', requireGuest, async (req, res) => {
     req.session.user = {
       id: user.id,
       full_name: user.full_name,
-      email: user.email
+      email: user.email,
+      profile_image: user.profile_image || null
     };
 
     return res.redirect('/?success=Login successful.');
@@ -88,6 +133,71 @@ router.get('/logout', requireAuth, (req, res) => {
   req.session.destroy(() => {
     res.redirect('/login?success=Logged out successfully.');
   });
+});
+
+router.get('/profile', requireAuth, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, full_name, email, profile_image, created_at FROM users WHERE id = ? LIMIT 1',
+      [req.session.user.id]
+    );
+
+    const user = rows[0];
+
+    if (!user) {
+      req.session.destroy(() => {
+        res.redirect('/login?error=Session expired. Please login again.');
+      });
+      return;
+    }
+
+    req.session.user = {
+      ...req.session.user,
+      full_name: user.full_name,
+      email: user.email,
+      profile_image: user.profile_image || null
+    };
+
+    return res.render('profile', {
+      user,
+      error: req.query.error || '',
+      success: req.query.success || ''
+    });
+  } catch (error) {
+    return res.redirect('/tasks?error=Unable to load profile.');
+  }
+});
+
+router.post('/profile/image', requireAuth, async (req, res) => {
+  const profileImage = req.files?.profile_image;
+
+  if (!profileImage || !profileImage.name) {
+    return res.redirect('/profile?error=Please select an image to upload.');
+  }
+
+  const uploadResult = saveProfileImage(profileImage);
+
+  if (!uploadResult.ok) {
+    return res.redirect(`/profile?error=${encodeURIComponent(uploadResult.error)}`);
+  }
+
+  try {
+    await uploadResult.move();
+
+    await pool.query('UPDATE users SET profile_image = ? WHERE id = ?', [
+      uploadResult.path,
+      req.session.user.id
+    ]);
+
+    req.session.user = {
+      ...req.session.user,
+      profile_image: uploadResult.path
+    };
+
+    return res.redirect('/profile?success=Profile image updated successfully.');
+  } catch (error) {
+    return res.redirect('/profile?error=Unable to update profile image.');
+  }
 });
 
 module.exports = router;

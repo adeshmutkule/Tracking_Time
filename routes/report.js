@@ -37,7 +37,12 @@ async function fetchReportLogs(userId, reportDate = '') {
          WHEN SUM(CASE WHEN l.end_time IS NULL THEN 1 ELSE 0 END) > 0 THEN NULL
          ELSE MAX(l.end_time)
        END AS end_time,
-       SUM(IFNULL(l.duration, 0)) AS duration,
+       SUM(
+         CASE
+           WHEN l.end_time IS NULL THEN GREATEST(TIMESTAMPDIFF(SECOND, l.start_time, NOW()), 0)
+           ELSE GREATEST(IFNULL(l.duration, 0), 0)
+         END
+       ) AS duration,
        COUNT(l.id) AS session_count
      FROM task_logs l
      INNER JOIN tasks t ON t.id = l.task_id
