@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
+const MySQLStore = require('express-mysql-session')(session);
 const fileUpload = require('express-fileupload');
 
 const { ensureSchema } = require('./config/db');
@@ -10,6 +11,28 @@ const reportRoutes = require('./routes/report');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'work_tracker.sid';
+const sessionMaxAgeMs = Number(process.env.SESSION_MAX_AGE_MS || 1000 * 60 * 60 * 24 * 30);
+const sessionStore = new MySQLStore({
+  host: process.env.DB_HOST || 'localhost',
+  port: Number(process.env.DB_PORT || 3306),
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || 'Adesh@123',
+  database: process.env.DB_NAME || 'work_tracker',
+  clearExpired: true,
+  checkExpirationInterval: 15 * 60 * 1000,
+  expiration: sessionMaxAgeMs,
+  createDatabaseTable: true
+});
+const sessionCookie = {
+  httpOnly: true,
+  sameSite: process.env.SESSION_COOKIE_SAMESITE || 'lax',
+  maxAge: sessionMaxAgeMs
+};
+
+if (process.env.SESSION_COOKIE_SECURE === 'true') {
+  sessionCookie.secure = true;
+}
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -29,9 +52,12 @@ app.use(
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(
   session({
+    name: sessionCookieName,
     secret: process.env.SESSION_SECRET || 'simple-session-secret',
+    store: sessionStore,
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
+    cookie: sessionCookie
   })
 );
 
