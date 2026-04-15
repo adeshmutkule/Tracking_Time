@@ -298,6 +298,177 @@ function createExcelReportSheet(workbook, logs, totalDuration) {
   return worksheet;
 }
 
+function escapeXml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function truncateText(value, maxLength) {
+  const text = String(value ?? '').trim();
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, Math.max(maxLength - 1, 0)).trimEnd()}…`;
+}
+
+function buildSvgTextLines(text, maxChars) {
+  const words = String(text ?? '').trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+  let currentLine = '';
+
+  words.forEach((word) => {
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+
+    if (candidate.length > maxChars && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+      return;
+    }
+
+    currentLine = candidate;
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines.length ? lines : [''];
+}
+
+function createSvgReportMarkup(reportDate, logs, totalDuration, reportOwnerName = '') {
+  const width = 1600;
+  const margin = 48;
+  const titleTop = 44;
+  const headerHeight = 120;
+  const summaryHeight = 84;
+  const rowHeight = 54;
+  const footerHeight = 72;
+  const tableColumns = [
+    { label: '#', width: 60, align: 'middle' },
+    { label: 'Task Name', width: 380, align: 'start' },
+    { label: 'Task Date', width: 150, align: 'middle' },
+    { label: 'Start Time', width: 170, align: 'middle' },
+    { label: 'End Time', width: 170, align: 'middle' },
+    { label: 'Sessions', width: 130, align: 'middle' },
+    { label: 'Duration', width: 160, align: 'middle' }
+  ];
+  const tableWidth = tableColumns.reduce((sum, column) => sum + column.width, 0);
+  const height = margin * 2 + headerHeight + summaryHeight + 44 + Math.max(logs.length, 1) * rowHeight + footerHeight;
+  const ownerName = String(reportOwnerName || 'User').trim() || 'User';
+  const generatedAt = new Date().toLocaleString('en-IN');
+  const headerTitle = reportDate ? `Daily Report Work - ${formatDayWithDate(reportDate)}` : 'Daily Report Work - All Dates';
+  const reportDay = formatDayWithDate(reportDate);
+  const stats = [
+    { label: 'Total Records', value: String(logs.length) },
+    { label: 'Total Duration', value: formatSeconds(totalDuration) },
+    { label: 'Report Day', value: reportDay }
+  ];
+
+  let svg = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+  svg += `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+  svg += `<defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eef4fb"/>
+      <stop offset="100%" stop-color="#f8fbff"/>
+    </linearGradient>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f4c81"/>
+      <stop offset="100%" stop-color="#1d73b7"/>
+    </linearGradient>
+    <style>
+      .title { font: 700 32px Arial, sans-serif; fill: #ffffff; }
+      .subtitle { font: 400 16px Arial, sans-serif; fill: #e8f3ff; }
+      .meta { font: 400 14px Arial, sans-serif; fill: #d7e8f6; }
+      .cardTitle { font: 700 14px Arial, sans-serif; fill: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+      .cardValue { font: 700 20px Arial, sans-serif; fill: #111827; }
+      .tableHead { font: 700 14px Arial, sans-serif; fill: #1f2937; }
+      .tableCell { font: 400 13px Arial, sans-serif; fill: #111827; }
+      .footerLabel { font: 700 18px Arial, sans-serif; fill: #1b5e20; }
+      .footerValue { font: 700 22px Arial, sans-serif; fill: #1b5e20; }
+    </style>
+  </defs>`;
+  svg += `<rect width="100%" height="100%" fill="url(#bg)"/>`;
+  svg += `<rect x="${margin}" y="${margin}" width="${width - margin * 2}" height="${headerHeight}" rx="20" fill="url(#hero)"/>`;
+  svg += `<text x="${margin + 28}" y="${margin + titleTop}" class="title">${escapeXml(ownerName)}</text>`;
+  svg += `<text x="${margin + 28}" y="${margin + 72}" class="subtitle">${escapeXml(headerTitle)}</text>`;
+  svg += `<text x="${width - margin - 28}" y="${margin + 72}" text-anchor="end" class="meta">Generated: ${escapeXml(generatedAt)}</text>`;
+
+  const cardY = margin + headerHeight + 22;
+  const cardWidth = Math.floor((width - margin * 2 - 24) / 3);
+  stats.forEach((stat, index) => {
+    const cardX = margin + index * (cardWidth + 12);
+    svg += `<rect x="${cardX}" y="${cardY}" width="${cardWidth}" height="${summaryHeight}" rx="14" fill="#f2f7ff" stroke="#d9e6f5"/>`;
+    svg += `<text x="${cardX + 16}" y="${cardY + 28}" class="cardTitle">${escapeXml(stat.label)}</text>`;
+    svg += `<text x="${cardX + 16}" y="${cardY + 58}" class="cardValue">${escapeXml(stat.value)}</text>`;
+  });
+
+  const tableY = cardY + summaryHeight + 24;
+  svg += `<rect x="${margin}" y="${tableY}" width="${tableWidth}" height="44" rx="8" fill="#e4edf7" stroke="#c4d2e3"/>`;
+
+  let currentX = margin;
+  tableColumns.forEach((column) => {
+    svg += `<line x1="${currentX}" y1="${tableY}" x2="${currentX}" y2="${tableY + 44}" stroke="#c4d2e3"/>`;
+    const textX = currentX + 10;
+    const anchor = column.align === 'middle' ? 'middle' : 'start';
+    const middleX = column.align === 'middle' ? currentX + column.width / 2 : textX;
+    svg += `<text x="${middleX}" y="${tableY + 28}" text-anchor="${anchor}" class="tableHead">${escapeXml(column.label)}</text>`;
+    currentX += column.width;
+  });
+  svg += `<line x1="${margin + tableWidth}" y1="${tableY}" x2="${margin + tableWidth}" y2="${tableY + 44}" stroke="#c4d2e3"/>`;
+
+  const bodyStartY = tableY + 44;
+  if (logs.length === 0) {
+    svg += `<rect x="${margin}" y="${bodyStartY}" width="${tableWidth}" height="${rowHeight}" fill="#ffffff" stroke="#dbe2ea"/>`;
+    svg += `<text x="${margin + tableWidth / 2}" y="${bodyStartY + 34}" text-anchor="middle" class="tableCell" fill="#4b5563">No sessions logged for the selected date.</text>`;
+  } else {
+    logs.forEach((log, index) => {
+      const rowY = bodyStartY + index * rowHeight;
+      const fill = index % 2 === 0 ? '#fcfdff' : '#ffffff';
+      svg += `<rect x="${margin}" y="${rowY}" width="${tableWidth}" height="${rowHeight}" fill="${fill}" stroke="#dbe2ea"/>`;
+
+      const rowValues = [
+        String(index + 1),
+        truncateText(log.task_name, 42),
+        formatReportDate(log.task_date),
+        formatTimeOnly(log.start_time),
+        log.end_time ? formatTimeOnly(log.end_time) : 'Running',
+        String(log.session_count || 0),
+        formatSeconds(log.duration || 0)
+      ];
+
+      let cellX = margin;
+      rowValues.forEach((value, cellIndex) => {
+        const column = tableColumns[cellIndex];
+        const anchor = column.align === 'middle' ? 'middle' : 'start';
+        const textX = column.align === 'middle' ? cellX + column.width / 2 : cellX + 10;
+        const lines = buildSvgTextLines(value, cellIndex === 1 ? 38 : 16);
+        const lineHeight = 16;
+        const startY = rowY + 22 - ((lines.length - 1) * lineHeight) / 2;
+
+        lines.slice(0, 2).forEach((line, lineIndex) => {
+          svg += `<text x="${textX}" y="${startY + lineIndex * lineHeight}" text-anchor="${anchor}" class="tableCell">${escapeXml(line)}</text>`;
+        });
+
+        cellX += column.width;
+      });
+    });
+  }
+
+  const footerY = bodyStartY + Math.max(logs.length, 1) * rowHeight + 22;
+  svg += `<rect x="${margin}" y="${footerY}" width="${tableWidth}" height="56" rx="10" fill="#e8f5e9" stroke="#cde8d0"/>`;
+  svg += `<text x="${margin + 18}" y="${footerY + 34}" class="footerLabel">Total Daily Work Duration</text>`;
+  svg += `<text x="${margin + tableWidth - 18}" y="${footerY + 34}" text-anchor="end" class="footerValue">${escapeXml(formatSeconds(totalDuration))}</text>`;
+  svg += `</svg>`;
+
+  return svg;
+}
+
 router.get('/report', async (req, res) => {
   const userId = Number(req.session.user?.id || 0);
 
@@ -391,6 +562,28 @@ router.get('/report/export/pdf', async (req, res) => {
     doc.end();
   } catch (error) {
     res.status(500).send('Unable to export PDF report.');
+  }
+});
+
+router.get('/report/export/image', async (req, res) => {
+  const userId = Number(req.session.user?.id || 0);
+  const reportOwnerName = String(req.session.user?.full_name || '').trim();
+
+  try {
+    const reportDate = normalizeReportDate(req.query.date);
+
+    if (!requireReportDate(res, reportDate, 'Image')) {
+      return;
+    }
+
+    const { logs, totalDuration } = await getReportSummary(userId, reportDate);
+    const svgMarkup = createSvgReportMarkup(reportDate, logs, totalDuration, reportOwnerName);
+
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Content-Disposition', `attachment; filename="${buildReportFilename('report', reportDate, 'svg')}"`);
+    res.send(svgMarkup);
+  } catch (error) {
+    res.status(500).send('Unable to export image report.');
   }
 });
 

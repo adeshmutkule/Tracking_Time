@@ -73,9 +73,16 @@
               >
                 Download PDF
               </a>
+              <a
+                href="/report/export/image?date=<%= encodeURIComponent(selectedDate) %>"
+                class="btn btn-warning text-dark"
+              >
+                Download Image
+              </a>
               <% } else { %>
               <span class="btn btn-success disabled" aria-disabled="true" tabindex="-1">Download Excel</span>
               <span class="btn btn-danger disabled" aria-disabled="true" tabindex="-1">Download PDF</span>
+              <span class="btn btn-warning text-dark disabled" aria-disabled="true" tabindex="-1">Download Image</span>
               <% } %>
             </div>
           </form>
