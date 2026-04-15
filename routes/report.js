@@ -344,22 +344,74 @@ function buildSvgTextLines(text, maxChars) {
 function createSvgReportMarkup(reportDate, logs, totalDuration, reportOwnerName = '') {
   const width = 1600;
   const margin = 48;
+  const innerWidth = width - margin * 2;
   const titleTop = 44;
   const headerHeight = 120;
   const summaryHeight = 84;
-  const rowHeight = 54;
-  const footerHeight = 72;
-  const tableColumns = [
-    { label: '#', width: 60, align: 'middle' },
-    { label: 'Task Name', width: 380, align: 'start' },
-    { label: 'Task Date', width: 150, align: 'middle' },
-    { label: 'Start Time', width: 170, align: 'middle' },
-    { label: 'End Time', width: 170, align: 'middle' },
-    { label: 'Sessions', width: 130, align: 'middle' },
-    { label: 'Duration', width: 160, align: 'middle' }
+  const minRowHeight = 54;
+  const footerHeight = 78;
+  const tableHeaderHeight = 44;
+  const tableColumnsBase = [
+    { label: '#', weight: 0.55, align: 'middle', maxChars: 4, maxLines: 1 },
+    { label: 'Task Name', weight: 3.9, align: 'start', maxChars: 44, maxLines: 3 },
+    { label: 'Task Date', weight: 1.45, align: 'middle', maxChars: 16, maxLines: 1 },
+    { label: 'Start Time', weight: 1.7, align: 'middle', maxChars: 16, maxLines: 1 },
+    { label: 'End Time', weight: 1.7, align: 'middle', maxChars: 16, maxLines: 1 },
+    { label: 'Sessions', weight: 1.1, align: 'middle', maxChars: 8, maxLines: 1 },
+    { label: 'Duration', weight: 1.5, align: 'middle', maxChars: 16, maxLines: 1 }
   ];
-  const tableWidth = tableColumns.reduce((sum, column) => sum + column.width, 0);
-  const height = margin * 2 + headerHeight + summaryHeight + 44 + Math.max(logs.length, 1) * rowHeight + footerHeight;
+  const totalWeight = tableColumnsBase.reduce((sum, column) => sum + column.weight, 0);
+  const tableColumns = tableColumnsBase.map((column) => ({
+    ...column,
+    width: Math.floor((innerWidth * column.weight) / totalWeight)
+  }));
+  const assignedWidth = tableColumns.reduce((sum, column) => sum + column.width, 0);
+  tableColumns[tableColumns.length - 1].width += innerWidth - assignedWidth;
+  const tableWidth = innerWidth;
+
+  function toCellLines(value, maxChars, maxLines) {
+    const text = String(value ?? '').replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    const lines = buildSvgTextLines(text, maxChars);
+
+    if (lines.length <= maxLines) {
+      return lines;
+    }
+
+    const clipped = lines.slice(0, maxLines);
+    clipped[maxLines - 1] = truncateText(clipped[maxLines - 1], Math.max(maxChars - 1, 1));
+    return clipped;
+  }
+
+  const preparedRows = logs.map((log, index) => {
+    const rowValues = [
+      String(index + 1),
+      String(log.task_name || ''),
+      formatReportDate(log.task_date),
+      formatTimeOnly(log.start_time),
+      log.end_time ? formatTimeOnly(log.end_time) : 'Running',
+      String(log.session_count || 0),
+      formatSeconds(log.duration || 0)
+    ];
+
+    const linesByCell = rowValues.map((value, cellIndex) => {
+      const column = tableColumns[cellIndex];
+      return toCellLines(value, column.maxChars, column.maxLines);
+    });
+
+    const maxLinesInRow = linesByCell.reduce((max, lines) => Math.max(max, lines.length), 1);
+    const rowHeight = Math.max(minRowHeight, 22 + maxLinesInRow * 16);
+
+    return {
+      values: rowValues,
+      linesByCell,
+      rowHeight
+    };
+  });
+
+  const bodyHeight = preparedRows.length
+    ? preparedRows.reduce((sum, row) => sum + row.rowHeight, 0)
+    : minRowHeight;
+  const height = margin * 2 + headerHeight + summaryHeight + tableHeaderHeight + bodyHeight + footerHeight + 42;
   const ownerName = String(reportOwnerName || 'User').trim() || 'User';
   const generatedAt = new Date().toLocaleString('en-IN');
   const headerTitle = reportDate ? `Daily Report Work - ${formatDayWithDate(reportDate)}` : 'Daily Report Work - All Dates';
@@ -371,7 +423,7 @@ function createSvgReportMarkup(reportDate, logs, totalDuration, reportOwnerName 
   ];
 
   let svg = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-  svg += `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+  svg += `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="auto" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMin meet">`;
   svg += `<defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#eef4fb"/>
@@ -382,25 +434,25 @@ function createSvgReportMarkup(reportDate, logs, totalDuration, reportOwnerName 
       <stop offset="100%" stop-color="#1d73b7"/>
     </linearGradient>
     <style>
-      .title { font: 700 32px Arial, sans-serif; fill: #ffffff; }
-      .subtitle { font: 400 16px Arial, sans-serif; fill: #e8f3ff; }
-      .meta { font: 400 14px Arial, sans-serif; fill: #d7e8f6; }
-      .cardTitle { font: 700 14px Arial, sans-serif; fill: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
-      .cardValue { font: 700 20px Arial, sans-serif; fill: #111827; }
-      .tableHead { font: 700 14px Arial, sans-serif; fill: #1f2937; }
-      .tableCell { font: 400 13px Arial, sans-serif; fill: #111827; }
-      .footerLabel { font: 700 18px Arial, sans-serif; fill: #1b5e20; }
-      .footerValue { font: 700 22px Arial, sans-serif; fill: #1b5e20; }
+      .title { font: 700 32px 'Segoe UI', 'Arial', sans-serif; fill: #ffffff; }
+      .subtitle { font: 400 16px 'Segoe UI', 'Arial', sans-serif; fill: #e8f3ff; }
+      .meta { font: 400 14px 'Segoe UI', 'Arial', sans-serif; fill: #d7e8f6; }
+      .cardTitle { font: 700 14px 'Segoe UI', 'Arial', sans-serif; fill: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; }
+      .cardValue { font: 700 20px 'Segoe UI', 'Arial', sans-serif; fill: #111827; }
+      .tableHead { font: 700 14px 'Segoe UI', 'Arial', sans-serif; fill: #1f2937; }
+      .tableCell { font: 400 13px 'Segoe UI', 'Arial', sans-serif; fill: #111827; }
+      .footerLabel { font: 700 18px 'Segoe UI', 'Arial', sans-serif; fill: #1b5e20; }
+      .footerValue { font: 700 22px 'Segoe UI', 'Arial', sans-serif; fill: #1b5e20; }
     </style>
   </defs>`;
   svg += `<rect width="100%" height="100%" fill="url(#bg)"/>`;
-  svg += `<rect x="${margin}" y="${margin}" width="${width - margin * 2}" height="${headerHeight}" rx="20" fill="url(#hero)"/>`;
+  svg += `<rect x="${margin}" y="${margin}" width="${innerWidth}" height="${headerHeight}" rx="20" fill="url(#hero)"/>`;
   svg += `<text x="${margin + 28}" y="${margin + titleTop}" class="title">${escapeXml(ownerName)}</text>`;
   svg += `<text x="${margin + 28}" y="${margin + 72}" class="subtitle">${escapeXml(headerTitle)}</text>`;
   svg += `<text x="${width - margin - 28}" y="${margin + 72}" text-anchor="end" class="meta">Generated: ${escapeXml(generatedAt)}</text>`;
 
   const cardY = margin + headerHeight + 22;
-  const cardWidth = Math.floor((width - margin * 2 - 24) / 3);
+  const cardWidth = Math.floor((innerWidth - 24) / 3);
   stats.forEach((stat, index) => {
     const cardX = margin + index * (cardWidth + 12);
     svg += `<rect x="${cardX}" y="${cardY}" width="${cardWidth}" height="${summaryHeight}" rx="14" fill="#f2f7ff" stroke="#d9e6f5"/>`;
@@ -409,58 +461,51 @@ function createSvgReportMarkup(reportDate, logs, totalDuration, reportOwnerName 
   });
 
   const tableY = cardY + summaryHeight + 24;
-  svg += `<rect x="${margin}" y="${tableY}" width="${tableWidth}" height="44" rx="8" fill="#e4edf7" stroke="#c4d2e3"/>`;
+  svg += `<rect x="${margin}" y="${tableY}" width="${tableWidth}" height="${tableHeaderHeight}" rx="8" fill="#e4edf7" stroke="#c4d2e3"/>`;
 
   let currentX = margin;
   tableColumns.forEach((column) => {
-    svg += `<line x1="${currentX}" y1="${tableY}" x2="${currentX}" y2="${tableY + 44}" stroke="#c4d2e3"/>`;
+    svg += `<line x1="${currentX}" y1="${tableY}" x2="${currentX}" y2="${tableY + tableHeaderHeight}" stroke="#c4d2e3"/>`;
     const textX = currentX + 10;
     const anchor = column.align === 'middle' ? 'middle' : 'start';
     const middleX = column.align === 'middle' ? currentX + column.width / 2 : textX;
     svg += `<text x="${middleX}" y="${tableY + 28}" text-anchor="${anchor}" class="tableHead">${escapeXml(column.label)}</text>`;
     currentX += column.width;
   });
-  svg += `<line x1="${margin + tableWidth}" y1="${tableY}" x2="${margin + tableWidth}" y2="${tableY + 44}" stroke="#c4d2e3"/>`;
+  svg += `<line x1="${margin + tableWidth}" y1="${tableY}" x2="${margin + tableWidth}" y2="${tableY + tableHeaderHeight}" stroke="#c4d2e3"/>`;
 
-  const bodyStartY = tableY + 44;
-  if (logs.length === 0) {
-    svg += `<rect x="${margin}" y="${bodyStartY}" width="${tableWidth}" height="${rowHeight}" fill="#ffffff" stroke="#dbe2ea"/>`;
+  const bodyStartY = tableY + tableHeaderHeight;
+  if (preparedRows.length === 0) {
+    svg += `<rect x="${margin}" y="${bodyStartY}" width="${tableWidth}" height="${minRowHeight}" fill="#ffffff" stroke="#dbe2ea"/>`;
     svg += `<text x="${margin + tableWidth / 2}" y="${bodyStartY + 34}" text-anchor="middle" class="tableCell" fill="#4b5563">No sessions logged for the selected date.</text>`;
   } else {
-    logs.forEach((log, index) => {
-      const rowY = bodyStartY + index * rowHeight;
+    let rowY = bodyStartY;
+    preparedRows.forEach((row, index) => {
       const fill = index % 2 === 0 ? '#fcfdff' : '#ffffff';
-      svg += `<rect x="${margin}" y="${rowY}" width="${tableWidth}" height="${rowHeight}" fill="${fill}" stroke="#dbe2ea"/>`;
-
-      const rowValues = [
-        String(index + 1),
-        truncateText(log.task_name, 42),
-        formatReportDate(log.task_date),
-        formatTimeOnly(log.start_time),
-        log.end_time ? formatTimeOnly(log.end_time) : 'Running',
-        String(log.session_count || 0),
-        formatSeconds(log.duration || 0)
-      ];
+      svg += `<rect x="${margin}" y="${rowY}" width="${tableWidth}" height="${row.rowHeight}" fill="${fill}" stroke="#dbe2ea"/>`;
 
       let cellX = margin;
-      rowValues.forEach((value, cellIndex) => {
+      row.values.forEach((value, cellIndex) => {
         const column = tableColumns[cellIndex];
         const anchor = column.align === 'middle' ? 'middle' : 'start';
         const textX = column.align === 'middle' ? cellX + column.width / 2 : cellX + 10;
-        const lines = buildSvgTextLines(value, cellIndex === 1 ? 38 : 16);
+        const lines = row.linesByCell[cellIndex];
         const lineHeight = 16;
-        const startY = rowY + 22 - ((lines.length - 1) * lineHeight) / 2;
+        const textBlockHeight = Math.max(lines.length, 1) * lineHeight;
+        const startY = rowY + (row.rowHeight - textBlockHeight) / 2 + 12;
 
-        lines.slice(0, 2).forEach((line, lineIndex) => {
+        lines.forEach((line, lineIndex) => {
           svg += `<text x="${textX}" y="${startY + lineIndex * lineHeight}" text-anchor="${anchor}" class="tableCell">${escapeXml(line)}</text>`;
         });
 
         cellX += column.width;
       });
+
+      rowY += row.rowHeight;
     });
   }
 
-  const footerY = bodyStartY + Math.max(logs.length, 1) * rowHeight + 22;
+  const footerY = bodyStartY + bodyHeight + 22;
   svg += `<rect x="${margin}" y="${footerY}" width="${tableWidth}" height="56" rx="10" fill="#e8f5e9" stroke="#cde8d0"/>`;
   svg += `<text x="${margin + 18}" y="${footerY + 34}" class="footerLabel">Total Daily Work Duration</text>`;
   svg += `<text x="${margin + tableWidth - 18}" y="${footerY + 34}" text-anchor="end" class="footerValue">${escapeXml(formatSeconds(totalDuration))}</text>`;
