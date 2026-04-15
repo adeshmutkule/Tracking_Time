@@ -11,8 +11,50 @@ const { requireAuth } = require('../middleware/auth');
 
 const router = express.Router();
 const TASK_LIST_PATH = '/tasks';
+const APP_TIME_ZONE = process.env.APP_TIME_ZONE || 'Asia/Kolkata';
 
 router.use(requireAuth);
+
+function getDateTimePartsInAppTimeZone(dateValue = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: APP_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(dateValue);
+
+  const map = {};
+
+  parts.forEach((part) => {
+    if (part.type !== 'literal') {
+      map[part.type] = part.value;
+    }
+  });
+
+  return {
+    year: map.year,
+    month: map.month,
+    day: map.day,
+    hour: map.hour,
+    minute: map.minute,
+    second: map.second
+  };
+}
+
+function getCurrentAppDateTime() {
+  const { year, month, day, hour, minute, second } = getDateTimePartsInAppTimeZone();
+  const safeHour = hour === '24' ? '00' : hour;
+  return `${year}-${month}-${day} ${safeHour}:${minute}:${second}`;
+}
+
+function getCurrentAppDate() {
+  const { year, month, day } = getDateTimePartsInAppTimeZone();
+  return `${year}-${month}-${day}`;
+}
 
 function getCurrentUserId(req) {
   return Number(req.session.user?.id || 0);
@@ -112,11 +154,7 @@ function toDateInputValue(dateValue) {
 }
 
 function getLocalTodayDate() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getCurrentAppDate();
 }
 
 async function refreshTaskTotalTime(taskId) {
@@ -136,6 +174,8 @@ async function refreshTaskTotalTime(taskId) {
 router.get('/', async (req, res) => {
   const userId = getCurrentUserId(req);
   const selectedDate = normalizeReportDate(req.query.date) || getLocalTodayDate();
+  const appNow = getCurrentAppDateTime();
+  const todayDate = getCurrentAppDate();
 
   try {
     const [suggestionRows] = await pool.query(
@@ -156,7 +196,7 @@ router.get('/', async (req, res) => {
          COALESCE(
            SUM(
              CASE
-               WHEN l.end_time IS NULL THEN GREATEST(TIMESTAMPDIFF(SECOND, l.start_time, NOW()), 0)
+               WHEN l.end_time IS NULL THEN GREATEST(TIMESTAMPDIFF(SECOND, l.start_time, ?), 0)
                ELSE GREATEST(IFNULL(l.duration, 0), 0)
              END
            ),
@@ -165,8 +205,8 @@ router.get('/', async (req, res) => {
          COALESCE(SUM(CASE WHEN l.end_time IS NULL THEN 1 ELSE 0 END), 0) AS active_session_count
        FROM task_logs l
        INNER JOIN tasks t ON t.id = l.task_id
-       WHERE t.user_id = ? AND DATE(t.task_date) = CURDATE()`,
-      [userId]
+       WHERE t.user_id = ? AND DATE(t.task_date) = ?`,
+      [appNow, userId, todayDate]
     );
 
     const todayTotalSeconds = Number(todayTotalRows[0]?.total_seconds || 0);
@@ -189,6 +229,7 @@ router.get('/', async (req, res) => {
 router.get('/tasks', async (req, res) => {
   const userId = getCurrentUserId(req);
   const selectedDate = normalizeReportDate(req.query.date) || getLocalTodayDate();
+  const appNow = getCurrentAppDateTime();
   const rawStatus = String(req.query.status || 'all').trim().toLowerCase();
   const searchTerm = String(req.query.search || '').trim();
   const allowedStatuses = new Set(['all', 'idle', 'running', 'paused', 'completed']);
@@ -206,6 +247,8 @@ router.get('/tasks', async (req, res) => {
     if (searchTerm) {
       queryParams.push(`%${searchTerm}%`);
     }
+
+    queryParams.unshift(appNow);
 
     const [tasks] = await pool.query(
       `SELECT
@@ -227,7 +270,7 @@ router.get('/tasks', async (req, res) => {
          GREATEST(
            t.total_time + IFNULL(
              (
-               SELECT SUM(GREATEST(TIMESTAMPDIFF(SECOND, l.start_time, NOW()), 0))
+               SELECT SUM(GREATEST(TIMESTAMPDIFF(SECOND, l.start_time, ?), 0))
                FROM task_logs l
                WHERE l.task_id = t.id AND l.end_time IS NULL
              ),
@@ -483,7 +526,9 @@ router.get('/start/:id', async (req, res) => {
       return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Only one active session is allowed per task.'));
     }
 
-    await pool.query('INSERT INTO task_logs (task_id, start_time) VALUES (?, NOW())', [taskId]);
+    const appNow = getCurrentAppDateTime();
+
+    await pool.query('INSERT INTO task_logs (task_id, start_time) VALUES (?, ?)', [taskId, appNow]);
     await pool.query('UPDATE tasks SET status = ? WHERE id = ?', ['running', taskId]);
 
     return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'success', 'Task started.'));
@@ -518,10 +563,11 @@ router.get('/pause/:id', async (req, res) => {
     }
 
     const logId = activeLog.id;
+    const appNow = getCurrentAppDateTime();
 
     await pool.query(
-      'UPDATE task_logs SET end_time = NOW(), duration = GREATEST(TIMESTAMPDIFF(SECOND, start_time, NOW()), 0) WHERE id = ?',
-      [logId]
+      'UPDATE task_logs SET end_time = ?, duration = GREATEST(TIMESTAMPDIFF(SECOND, start_time, ?), 0) WHERE id = ?',
+      [appNow, appNow, logId]
     );
 
     await refreshTaskTotalTime(taskId);
@@ -562,7 +608,9 @@ router.get('/resume/:id', async (req, res) => {
       return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'error', 'Only one active session is allowed per task.'));
     }
 
-    await pool.query('INSERT INTO task_logs (task_id, start_time) VALUES (?, NOW())', [taskId]);
+    const appNow = getCurrentAppDateTime();
+
+    await pool.query('INSERT INTO task_logs (task_id, start_time) VALUES (?, ?)', [taskId, appNow]);
     await pool.query('UPDATE tasks SET status = ? WHERE id = ?', ['running', taskId]);
 
     return res.redirect(buildRedirectMessage(TASK_LIST_PATH, 'success', 'Task resumed.'));
@@ -597,9 +645,11 @@ router.get('/end/:id', async (req, res) => {
     const activeLog = await fetchOpenTaskLog(taskId);
 
     if (activeLog) {
+      const appNow = getCurrentAppDateTime();
+
       await pool.query(
-        'UPDATE task_logs SET end_time = NOW(), duration = GREATEST(TIMESTAMPDIFF(SECOND, start_time, NOW()), 0) WHERE id = ?',
-        [activeLog.id]
+        'UPDATE task_logs SET end_time = ?, duration = GREATEST(TIMESTAMPDIFF(SECOND, start_time, ?), 0) WHERE id = ?',
+        [appNow, appNow, activeLog.id]
       );
     }
 

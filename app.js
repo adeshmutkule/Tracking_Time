@@ -4,6 +4,7 @@ const session = require('express-session');
 const fileUpload = require('express-fileupload');
 
 const { ensureSchema } = require('./config/db');
+const { recalculateTaskDurations } = require('./migrations/recalculate-durations');
 const authRoutes = require('./routes/auth');
 const taskRoutes = require('./routes/tasks');
 const reportRoutes = require('./routes/report');
@@ -75,6 +76,11 @@ app.use((error, req, res, next) => {
 async function startServer() {
   try {
     await ensureSchema();
+
+    if (process.env.AUTO_RUN_DURATION_MIGRATION === 'true') {
+      await recalculateTaskDurations();
+      console.log('Startup migration completed: task durations recalculated.');
+    }
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

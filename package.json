@@ -5,7 +5,9 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "dev": "nodemon app.js"
+    "dev": "nodemon app.js",
+    "migrate:sql": "node migrations/run-sql-file.js",
+    "migrate:recalculate-durations": "node migrations/run-sql-file.js migrations/recalculate-task-durations.sql"
   },
   "keywords": [
     "express",
