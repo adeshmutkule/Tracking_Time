@@ -1,6 +1,7 @@
 const express = require('express');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
+const sharp = require('sharp');
 
 const { pool } = require('../config/db');
 const {
@@ -623,10 +624,13 @@ router.get('/report/export/image', async (req, res) => {
 
     const { logs, totalDuration } = await getReportSummary(userId, reportDate);
     const svgMarkup = createSvgReportMarkup(reportDate, logs, totalDuration, reportOwnerName);
+    const pngBuffer = await sharp(Buffer.from(svgMarkup))
+      .png({ quality: 100, compressionLevel: 9 })
+      .toBuffer();
 
-    res.setHeader('Content-Type', 'image/svg+xml');
-    res.setHeader('Content-Disposition', `attachment; filename="${buildReportFilename('report', reportDate, 'svg')}"`);
-    res.send(svgMarkup);
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `attachment; filename="${buildReportFilename('report', reportDate, 'png')}"`);
+    res.send(pngBuffer);
   } catch (error) {
     res.status(500).send('Unable to export image report.');
   }
