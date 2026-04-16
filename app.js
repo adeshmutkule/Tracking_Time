@@ -30,8 +30,6 @@ app.set('view cache', process.env.NODE_ENV === 'production');
 app.use(express.urlencoded({ extended: true }));
 app.use(
   fileUpload({
-    limits: { fileSize: 2 * 1024 * 1024 },
-    abortOnLimit: true,
     createParentPath: true,
     useTempFiles: false
   })
